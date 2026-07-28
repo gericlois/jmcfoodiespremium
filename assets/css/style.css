@@ -1,0 +1,506 @@
+/* ==========================================================
+   App-specific additions on top of theme.css (Sarab template).
+   theme.css supplies: --primary/--secondary/--dark/--green/--cream,
+   Playfair/Poppins/Dancing Script type, .slbl/.stitle/.sline,
+   .btn-red, .flbl/.fctrl, .hbadge/.hstats/.hstat,
+   #topbar/#nav/.blogo/.nav-cta, footer/.fnm/.ftit/.flinks/.fci/.fbot,
+   .sucmsg
+   ========================================================== */
+
+/* White rounded card — deliberately NOT named .fcard. theme.css defines
+   .fcard twice (once for the hero's floating badges with position:absolute,
+   again later for a plain card) and the second definition never resets
+   position, so anything using .fcard silently inherits position:absolute
+   and gets pulled out of the page flow. This is the safe replacement. */
+/* Hero background photo. theme.css set #hero to a plain --cream background
+   with dark text tuned for that; a real photo needs a dark overlay for the
+   same text to stay legible, so every hero text color is re-scoped below.
+   Path is relative to this CSS file (assets/css/ -> ../img/), not BASE_URL,
+   since a static stylesheet can't use PHP's dynamic subfolder constant. */
+#hero {
+  background:
+    linear-gradient(rgba(13, 40, 24, 0.8), rgba(13, 40, 24, 0.72)),
+    url('../img/head_bg.jpg') center/cover no-repeat;
+}
+#hero .hbadge span {
+  color: var(--dark);
+}
+#hero .htitle,
+#hero .hdesc,
+#hero .hstat .snum,
+#hero .hstat small {
+  color: #fff;
+}
+#hero .htitle .hl {
+  color: var(--secondary);
+}
+#hero .htitle .hl::before {
+  background: rgba(217, 165, 33, 0.25);
+}
+#hero .hstat .snum em {
+  color: var(--secondary);
+}
+#hero .sdiv {
+  background: rgba(255, 255, 255, 0.3);
+}
+#hero .btn-outline-theme {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.55);
+}
+#hero .btn-outline-theme:hover {
+  border-color: var(--secondary);
+  color: var(--secondary);
+}
+
+.panel-card {
+  position: relative;
+  background: #fff;
+  border-radius: 18px;
+  padding: 32px;
+  box-shadow: 0 6px 30px rgba(0, 0, 0, 0.08);
+}
+
+/* Real JMC Foodies brand palette (overrides theme.css's Sarab red/gold —
+   this file loads after theme.css so these values win everywhere). */
+:root {
+  --primary: #14532d;
+  --secondary: #d9a521;
+  --dark: #0d2818;
+  --green: #2f9e63;
+}
+
+/* Real logo placement. JPG has a white background (no alpha), so on dark
+   backgrounds (footer, admin nav) it needs a white card to look intentional. */
+.brand-logo {
+  height: 44px;
+  width: auto;
+  display: block;
+}
+.brand-logo-box {
+  background: #fff;
+  border-radius: 10px;
+  padding: 6px 10px;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Product photo cards (menu/homepage catalog, buy page) */
+.product-photo {
+  width: 100%;
+  height: 200px;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 12px 12px 0 0;
+}
+.product-photo-lg {
+  width: 100%;
+  max-height: 320px;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 14px;
+}
+.product-thumb {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 6px;
+  border: 1px solid #eee;
+}
+/* Full poster/marketing images — width:100% keeps it inside its container
+   at any screen size, max-width just stops it growing huge on desktop.
+   (Never use a plain "max-width:480px" inline style for this — an inline
+   style always wins over .img-fluid's responsive max-width:100%, which is
+   exactly what caused this to overflow on mobile before.) */
+.highlight-poster {
+  width: 100%;
+  max-width: 480px;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+}
+
+/* Compact page-header banner used on every inner page instead of the
+   template's full-height hero (which only makes sense once, on index.php). */
+/* Light white gradient carrying the brand green/gold, used behind the
+   shop/product grid sections (menu.php and the index.php product teaser). */
+.shop-bg {
+  background: linear-gradient(135deg, #ffffff 0%, rgba(217, 165, 33, 0.08) 45%, rgba(20, 83, 45, 0.07) 100%);
+}
+
+.inner-hero {
+  background: var(--cream);
+  padding: 48px 0 40px;
+  text-align: center;
+}
+.inner-hero .stitle {
+  margin-bottom: 0;
+}
+
+/* Error message box, same shape as the template's .sucmsg but red */
+.errmsg {
+  text-align: left;
+  padding: 16px 20px;
+  background: rgba(232, 40, 26, 0.07);
+  border-radius: 11px;
+  margin-bottom: 20px;
+}
+.errmsg p {
+  color: var(--primary);
+  font-weight: 600;
+  margin: 0;
+  font-size: 0.88rem;
+}
+.errmsg ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--primary);
+  font-weight: 600;
+  font-size: 0.88rem;
+}
+.sucmsg.is-visible {
+  display: block;
+  text-align: left;
+}
+
+/* Show/hide toggle button sitting inside a password field */
+.pwd-field {
+  position: relative;
+}
+.pwd-field .fctrl {
+  padding-right: 44px;
+}
+.pwd-toggle {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #999;
+  cursor: pointer;
+  padding: 4px 6px;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+.pwd-toggle:hover {
+  color: var(--primary);
+}
+
+/* Secondary/outline button to pair with .btn-red */
+.btn-outline-theme {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  background: transparent;
+  color: var(--dark);
+  border: 2px solid #eee;
+  border-radius: 50px;
+  padding: 12px 30px;
+  font-weight: 600;
+  font-size: 0.93rem;
+  font-family: "Poppins", sans-serif;
+  transition: 0.3s;
+  cursor: pointer;
+}
+.btn-outline-theme:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+/* Stat tiles for dashboard/admin */
+.stat-tile {
+  background: #fff;
+  border-radius: 16px;
+  padding: 24px 18px;
+  text-align: center;
+  box-shadow: var(--shadow);
+  height: 100%;
+}
+.stat-tile .stat-num {
+  font-family: "Playfair Display", serif;
+  font-weight: 900;
+  font-size: 1.7rem;
+  color: var(--dark);
+  line-height: 1.15;
+}
+.stat-tile .stat-num.accent {
+  color: var(--primary);
+}
+.stat-tile .stat-lbl {
+  font-size: 0.72rem;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-top: 4px;
+}
+
+/* Referral code display */
+.refcode-box {
+  background: var(--cream);
+  border: 2px dashed var(--primary);
+  border-radius: 11px;
+  padding: 12px 18px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-align: center;
+  color: var(--dark);
+  font-family: "Poppins", sans-serif;
+}
+
+.btn-copy-icon {
+  background: none;
+  border: none;
+  color: var(--primary);
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 4px;
+  flex-shrink: 0;
+}
+.btn-copy-icon:hover {
+  color: var(--dark);
+}
+
+/* Tables */
+.table-theme {
+  width: 100%;
+  background: #fff;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  border-collapse: collapse;
+}
+.table-theme thead th {
+  background: var(--dark);
+  color: #fff;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  font-weight: 600;
+  padding: 14px 16px;
+  border: none;
+}
+.table-theme tbody td {
+  padding: 13px 16px;
+  font-size: 0.87rem;
+  color: #555;
+  border-bottom: 1px solid #f1f1f1;
+  vertical-align: middle;
+}
+.table-theme tbody tr:last-child td {
+  border-bottom: none;
+}
+.table-theme tbody tr:hover {
+  background: rgba(232, 40, 26, 0.04);
+}
+
+/* Status / type badges */
+.pill {
+  display: inline-block;
+  padding: 4px 14px;
+  border-radius: 30px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: capitalize;
+  color: #fff;
+}
+.pill-pending { background: var(--secondary); }
+.pill-processing { background: #3b82f6; }
+.pill-completed { background: var(--green); }
+.pill-cancelled { background: #999; }
+.pill-approved { background: var(--green); }
+.pill-rejected { background: var(--primary); }
+.pill-suspended { background: #999; }
+.pill-active { background: var(--green); }
+
+.amount-credit { color: var(--green); font-weight: 600; }
+.amount-debit { color: var(--primary); font-weight: 600; }
+
+/* Admin left sidebar layout (template has no admin UI, so this reuses the
+   same brand variables in a dark vertical nav instead of the site's own
+   horizontal navbar). Sidebar is a Bootstrap "offcanvas-lg": a normal
+   static column at >=992px, a slide-in panel below that — no custom JS
+   needed, Bootstrap's own offcanvas component handles both. */
+.admin-shell {
+  display: flex;
+  min-height: 100vh;
+  align-items: stretch;
+}
+.admin-sidebar.offcanvas-lg {
+  --bs-offcanvas-width: 250px;
+  background: var(--dark);
+  border-right: none;
+}
+/* Bootstrap only auto-converts offcanvas-lg into a static sidebar at
+   >=992px when it's nested inside a .navbar-expand-lg wrapper (that's the
+   only selector its own CSS ships to reset position/visibility/transform).
+   Our sidebar isn't a navbar, so without this it stays visibility:hidden;
+   transform:translateX(-100%) — i.e. invisible — at every screen width,
+   including desktop. This replicates that reset for our own markup. */
+@media (min-width: 992px) {
+  .admin-sidebar.offcanvas-lg {
+    position: static !important;
+    z-index: auto !important;
+    visibility: visible !important;
+    transform: none !important;
+    height: auto !important;
+    /* Bootstrap's own >=992px override forces offcanvas-lg's background to
+       transparent!important (meant for the navbar-nested use case, where the
+       navbar itself supplies the background) — restate dark here so it wins. */
+    background-color: var(--dark) !important;
+  }
+  .admin-sidebar.offcanvas-lg .offcanvas-body {
+    background-color: var(--dark) !important;
+  }
+}
+.admin-sidebar-body {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.admin-sidebar-brand {
+  padding: 22px 20px;
+  display: flex;
+}
+.admin-sidebar-nav {
+  flex: 1 1 auto;
+  padding: 8px 14px;
+}
+.admin-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 14px;
+  margin-bottom: 3px;
+  border-radius: 9px;
+  color: rgba(255, 255, 255, 0.75);
+  font-weight: 500;
+  font-size: 0.87rem;
+  text-decoration: none;
+  transition: 0.2s;
+}
+.admin-nav-link i { width: 18px; text-align: center; }
+.admin-nav-link:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+.admin-nav-link.active {
+  background: var(--primary);
+  color: #fff;
+}
+.admin-sidebar-bottom {
+  padding: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+.admin-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: var(--cream);
+  display: flex;
+  flex-direction: column;
+}
+.admin-content {
+  flex: 1 1 auto;
+}
+.admin-topbar {
+  background: var(--dark);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.admin-topbar-toggle {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 1.2rem;
+  padding: 4px 8px;
+}
+
+/* Small pill buttons for table row actions (admin lists) */
+.btn-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  border-radius: 30px;
+  padding: 6px 14px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  font-family: "Poppins", sans-serif;
+  cursor: pointer;
+  transition: 0.3s;
+  text-decoration: none;
+}
+.btn-chip-primary { background: var(--primary); color: #fff; }
+.btn-chip-primary:hover { background: #c01e12; color: #fff; }
+.btn-chip-success { background: var(--green); color: #fff; }
+.btn-chip-success:hover { opacity: 0.88; color: #fff; }
+.btn-chip-outline { background: #fff; color: var(--dark); border: 2px solid #eee; }
+.btn-chip-outline:hover { border-color: var(--primary); color: var(--primary); }
+
+/* Simple filter/tab pills reused on admin list pages */
+.filter-pill {
+  display: inline-block;
+  padding: 7px 18px;
+  border-radius: 30px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  border: 2px solid #eee;
+  color: var(--dark);
+  transition: 0.3s;
+}
+.filter-pill.active,
+.filter-pill:hover {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
+}
+
+@media (max-width: 575.98px) {
+  .inner-hero { padding: 36px 0 30px; }
+}
+
+/* ==========================================================
+   Mobile fixes. theme.css (Sarab template) force-hides a couple of
+   elements below 768px with !important, meant for its own decorative
+   content — but we reuse those same classes for real information
+   (rebate/override rates, contact email), so they need to stay visible
+   and reflow instead of disappearing.
+   ========================================================== */
+@media (max-width: 767.98px) {
+  .hstats {
+    display: flex !important;
+    justify-content: center;
+    text-align: center;
+  }
+  .hstat {
+    flex: 1 1 40%;
+  }
+  .sdiv {
+    display: none;
+  }
+  #topbar .top-contact span:last-child {
+    display: inline !important;
+  }
+}
+
+/* Prevent any oversized content from forcing horizontal scroll on narrow
+   screens (images/tables are the usual culprits). */
+img {
+  max-width: 100%;
+  height: auto;
+}
+body {
+  overflow-x: hidden;
+  /* Sticky footer: body's direct children (navbar, page sections, footer)
+     become a column flex layout, and footer's auto top-margin consumes
+     whatever space is left so it sits at the viewport bottom on short
+     pages, while still flowing normally below content on tall ones. */
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+footer {
+  margin-top: auto;
+}

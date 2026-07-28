@@ -1,0 +1,11 @@
+# Local database backups/exports — may contain real user data.
+# (database/referral_platform.sql is the app's schema+seed source, not a
+# live-data dump, so it's intentionally NOT excluded here.)
+/referral_platform_backup.sql
+
+# Editor/tool-local config, not app code
+.claude/
+
+# Purchased/vendor template reference source — the app only uses the copy
+# baked into assets/css/theme.css, not these original template files
+theme/

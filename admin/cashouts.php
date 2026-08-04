@@ -75,17 +75,20 @@ require __DIR__ . '/includes/admin_sidebar.php';
 
   <div class="table-responsive">
     <table class="table-theme">
-      <thead><tr><th>User</th><th>Amount</th><th>GCash #</th><th>GCash Name</th><th>Status</th><th>Date</th><th></th></tr></thead>
+      <thead><tr><th>User</th><th>Requested</th><th>Fee</th><th>Pay Out</th><th>Bank</th><th>Account #</th><th>Account Name</th><th>Status</th><th>Date</th><th></th></tr></thead>
       <tbody>
       <?php if ($cashouts->num_rows === 0): ?>
-        <tr><td colspan="7" class="text-muted">No cashout requests found.</td></tr>
+        <tr><td colspan="10" class="text-muted">No cashout requests found.</td></tr>
       <?php endif; ?>
       <?php while ($c = $cashouts->fetch_assoc()): ?>
         <tr>
           <td><?= sanitize($c['full_name']) ?> <span class="text-muted small">(<?= sanitize($c['username']) ?>)</span></td>
           <td><?= format_price($c['amount']) ?></td>
-          <td><?= sanitize($c['gcash_number']) ?></td>
-          <td><?= sanitize($c['gcash_name']) ?></td>
+          <td class="text-muted"><?= format_price($c['fee_amount']) ?></td>
+          <td class="fw-bold"><?= format_price($c['net_amount']) ?></td>
+          <td><?= sanitize($c['bank_name']) ?></td>
+          <td><?= sanitize($c['account_number']) ?></td>
+          <td><?= sanitize($c['account_name']) ?></td>
           <td><span class="pill pill-<?= $c['status'] ?>"><?= sanitize($c['status']) ?></span></td>
           <td><?= date('M j, Y', strtotime($c['created_at'])) ?></td>
           <td>
@@ -93,7 +96,7 @@ require __DIR__ . '/includes/admin_sidebar.php';
               <form method="post" class="d-inline">
                 <input type="hidden" name="id" value="<?= (int) $c['id'] ?>">
                 <input type="hidden" name="action" value="approve">
-                <button type="submit" class="btn-chip btn-chip-success" onclick="return confirm('Mark this cashout as paid via GCash?');">Approve</button>
+                <button type="submit" class="btn-chip btn-chip-success" onclick="return confirm('Confirm you have paid out <?= format_price($c['net_amount']) ?> (net of <?= format_price($c['fee_amount']) ?> fee) to this user?');">Approve</button>
               </form>
               <form method="post" class="d-inline">
                 <input type="hidden" name="id" value="<?= (int) $c['id'] ?>">

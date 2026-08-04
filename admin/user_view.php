@@ -63,7 +63,7 @@ require __DIR__ . '/includes/admin_sidebar.php';
       <div class="stat-tile"><div class="stat-num" style="font-size:1.3rem;"><?= format_price($total_overrides) ?></div><div class="stat-lbl">Overrides Earned</div></div>
     </div>
     <div class="col-6 col-md-3">
-      <div class="stat-tile"><div class="stat-num accent" style="font-size:1.3rem;"><?= format_price($balance) ?></div><div class="stat-lbl"><?= sanitize(WALLET_NAME) ?> Balance</div></div>
+      <div class="stat-tile"><div class="stat-num accent" style="font-size:1.3rem;"><?= format_price($balance) ?></div><div class="stat-lbl">JMC Wallet Balance</div></div>
     </div>
     <div class="col-6 col-md-3">
       <div class="stat-tile"><div class="stat-num"><?= (int) $referrals->num_rows ?></div><div class="stat-lbl">Direct Referrals</div></div>

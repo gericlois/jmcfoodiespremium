@@ -3,6 +3,15 @@ function format_price($amount) {
     return '₱' . number_format((float) $amount, 2);
 }
 
+function payment_method_label($method) {
+    $labels = [
+        'wallet' => 'JMC Wallet',
+        'bank_transfer' => 'Bank Transfer - Eastwest QR',
+        'cod' => 'Cash on Pick-up / Delivery',
+    ];
+    return $labels[$method] ?? $method;
+}
+
 function sanitize($value) {
     return htmlspecialchars(trim($value ?? ''), ENT_QUOTES, 'UTF-8');
 }
@@ -35,7 +44,7 @@ function setting($conn, $key, $default = null) {
 // old file if one is replaced. Returns [filename_to_store, error_or_null].
 // $existing_filename is returned unchanged if no new file was uploaded.
 // ---------------------------------------------------------------
-function handle_product_image_upload($file_key, $existing_filename) {
+function handle_product_image_upload($file_key, $existing_filename, $subfolder = 'products') {
     if (empty($_FILES[$file_key]['name'])) {
         return [$existing_filename, null];
     }
@@ -56,13 +65,13 @@ function handle_product_image_upload($file_key, $existing_filename) {
     }
 
     $new_filename = bin2hex(random_bytes(8)) . '.' . $allowed_types[$mime];
-    $dest = UPLOAD_PATH . 'products/' . $new_filename;
+    $dest = UPLOAD_PATH . $subfolder . '/' . $new_filename;
     if (!move_uploaded_file($_FILES[$file_key]['tmp_name'], $dest)) {
         return [$existing_filename, 'Failed to save uploaded image.'];
     }
 
-    if ($existing_filename && is_file(UPLOAD_PATH . 'products/' . $existing_filename)) {
-        unlink(UPLOAD_PATH . 'products/' . $existing_filename);
+    if ($existing_filename && is_file(UPLOAD_PATH . $subfolder . '/' . $existing_filename)) {
+        unlink(UPLOAD_PATH . $subfolder . '/' . $existing_filename);
     }
     return [$new_filename, null];
 }
@@ -78,13 +87,14 @@ function send_account_approved_email($to_email, $full_name) {
     if (empty($to_email)) {
         return false;
     }
-    $subject = 'Your ' . APP_NAME . ' account has been confirmed';
+    $module_name = 'JMC Foodies Wellness'; // runs outside page-render context, no $module_name variable available
+    $subject = 'Your ' . $module_name . ' account has been confirmed';
     $message = "Hi {$full_name},\r\n\r\n"
-        . 'Good news! Your ' . APP_NAME . " account has been reviewed and confirmed by our team.\r\n"
+        . 'Good news! Your ' . $module_name . " account has been reviewed and confirmed by our team.\r\n"
         . "You can now log in and start earning.\r\n\r\n"
         . 'Log in here: ' . BASE_URL . "/login.php\r\n\r\n"
-        . '— ' . APP_NAME . ' Team';
-    $headers = 'From: ' . APP_NAME . ' <no-reply@' . preg_replace('/^www\./', '', parse_url(BASE_URL, PHP_URL_HOST) ?: 'localhost') . ">\r\n"
+        . '— ' . $module_name . ' Team';
+    $headers = 'From: ' . $module_name . ' <no-reply@' . preg_replace('/^www\./', '', parse_url(BASE_URL, PHP_URL_HOST) ?: 'localhost') . ">\r\n"
         . 'Content-Type: text/plain; charset=UTF-8';
     return mail($to_email, $subject, $message, $headers);
 }
@@ -140,7 +150,7 @@ function generate_referral_code($conn) {
 function referral_link($code) {
     $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
     $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-    return $scheme . '://' . $host . BASE_URL . '/register.php?ref=' . urlencode($code);
+    return $scheme . '://' . $host . WELLNESS_URL . '/register.php?ref=' . urlencode($code);
 }
 
 // ---------------------------------------------------------------

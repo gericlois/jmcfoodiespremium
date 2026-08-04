@@ -1,0 +1,103 @@
+<?php
+require __DIR__ . '/../config/constants.php';
+require __DIR__ . '/../config/database.php';
+require __DIR__ . '/../includes/functions.php';
+require __DIR__ . '/../includes/auth.php';
+require __DIR__ . '/includes/module.php';
+require __DIR__ . '/includes/functions.php';
+
+require_basics_access($conn);
+
+$member = basics_get_member($conn, current_user_id());
+$id = (int) ($_GET['id'] ?? 0);
+
+$stmt = $conn->prepare("SELECT o.*, c.label AS cycle_label, c.payment_due_date, c.delivery_date FROM basics_orders o
+                         JOIN basics_cycles c ON c.id = o.cycle_id
+                         WHERE o.id = ? AND o.member_id = ? AND o.status != 'draft'");
+$stmt->bind_param('ii', $id, $member['id']);
+$stmt->execute();
+$order = $stmt->get_result()->fetch_assoc();
+$stmt->close();
+
+if (!$order) {
+    redirect('/basics/orders.php');
+}
+
+$stmt = $conn->prepare("SELECT oi.*, p.name, p.sku, p.unit FROM basics_order_items oi
+                         JOIN basics_products p ON p.id = oi.product_id
+                         WHERE oi.order_id = ? ORDER BY oi.id ASC");
+$stmt->bind_param('i', $id);
+$stmt->execute();
+$items = $stmt->get_result();
+
+$stmt = $conn->prepare("SELECT * FROM basics_payments WHERE order_id = ? ORDER BY created_at DESC");
+$stmt->bind_param('i', $id);
+$stmt->execute();
+$payments = $stmt->get_result();
+
+$pill_map = ['placed' => 'processing', 'delivered' => 'completed', 'cancelled' => 'cancelled'];
+
+$page_title = 'Order #' . $order['id'];
+require __DIR__ . '/../includes/header.php';
+require __DIR__ . '/../includes/navbar.php';
+?>
+
+<div class="inner-hero">
+  <div class="container">
+    <a href="<?= BASICS_URL ?>/orders.php" class="small">&larr; Back to Orders</a>
+    <h1 class="stitle" style="font-size:2rem;">Order #<?= (int) $order['id'] ?></h1>
+  </div>
+</div>
+
+<div class="container py-5">
+  <div class="row g-4">
+    <div class="col-12 col-md-7">
+      <div class="panel-card mb-4">
+        <h2 class="h6">Order Details</h2>
+        <p class="mb-1">Cycle: <?= sanitize($order['cycle_label']) ?></p>
+        <p class="mb-1">Payment Due: <?= date('M j, Y', strtotime($order['payment_due_date'])) ?></p>
+        <p class="mb-1">Delivery: <?= date('M j, Y', strtotime($order['delivery_date'])) ?></p>
+        <p class="mb-0">Status: <span class="pill pill-<?= $pill_map[$order['status']] ?? 'pending' ?>"><?= sanitize($order['status']) ?></span></p>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table-theme">
+          <thead><tr><th>Product</th><th>Qty</th><th>Unit Price</th><th>Line Total</th></tr></thead>
+          <tbody>
+          <?php while ($item = $items->fetch_assoc()): ?>
+            <tr>
+              <td><?= sanitize($item['name']) ?></td>
+              <td><?= (int) $item['quantity'] ?> <?= sanitize($item['unit']) ?></td>
+              <td><?= format_price($item['unit_price']) ?></td>
+              <td><?= format_price($item['line_total']) ?></td>
+            </tr>
+          <?php endwhile; ?>
+          <tr><td colspan="3" class="text-end fw-bold">Total</td><td class="fw-bold"><?= format_price($order['total_amount']) ?></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="col-12 col-md-5">
+      <div class="panel-card">
+        <h2 class="h6">Payment History</h2>
+        <?php if ($payments->num_rows === 0): ?>
+          <p class="text-muted mb-0">No payment recorded yet.</p>
+        <?php endif; ?>
+        <?php while ($p = $payments->fetch_assoc()): ?>
+          <div class="mb-3 pb-3" style="border-bottom:1px solid #f1f1f1;">
+            <p class="mb-1">Paid: <span class="fw-bold"><?= format_price($p['amount_paid']) ?></span></p>
+            <?php if ($p['is_late']): ?>
+              <p class="mb-1 small" style="color:var(--primary);">Late payment &mdash; <?= format_price($p['penalty_amount']) ?> penalty (<?= (int) ($p['penalty_rate'] * 100) ?>%)</p>
+            <?php else: ?>
+              <p class="mb-1 small" style="color:var(--green);">On time, no penalty</p>
+            <?php endif; ?>
+            <p class="mb-0 small text-muted"><?= date('M j, Y', strtotime($p['paid_at'])) ?></p>
+          </div>
+        <?php endwhile; ?>
+      </div>
+    </div>
+  </div>
+</div>
+
+<?php require __DIR__ . '/../includes/footer.php'; ?>

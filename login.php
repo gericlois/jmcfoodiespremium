@@ -5,7 +5,7 @@ require __DIR__ . '/includes/functions.php';
 require __DIR__ . '/includes/auth.php';
 
 if (is_logged_in()) {
-    redirect(!empty($_SESSION['must_change_password']) ? '/change_password.php' : '/dashboard.php');
+    redirect(!empty($_SESSION['must_change_password']) ? '/change_password.php' : route_after_login($conn, current_user_id()));
 }
 
 $errors = [];
@@ -21,16 +21,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $user = $stmt->get_result()->fetch_assoc();
     $stmt->close();
 
+    // Only a hard "suspended" account is blocked here. A Wellness-side
+    // "pending" account can still log in — a Basics-approved member whose
+    // Wellness application hasn't been reviewed yet needs to reach Basics.
+    // route_after_login() sends them to the right place either way.
     if (!$user || !password_verify($password, $user['password_hash'])) {
         $errors[] = 'Invalid username or password.';
-    } elseif ($user['status'] === 'pending') {
-        $errors[] = 'Your account is pending admin approval. Please check back soon.';
     } elseif ($user['status'] === 'suspended') {
         $errors[] = 'Your account has been suspended. Please contact support.';
     } else {
         $_SESSION['user_id'] = $user['id'];
         $_SESSION['must_change_password'] = (bool) $user['must_change_password'];
-        redirect($user['must_change_password'] ? '/change_password.php' : '/dashboard.php');
+        redirect($user['must_change_password'] ? '/change_password.php' : route_after_login($conn, $user['id']));
     }
 }
 
@@ -73,7 +75,7 @@ require __DIR__ . '/includes/navbar.php';
           </div>
           <button type="submit" class="btn-red w-100 justify-content-center"><i class="fas fa-right-to-bracket"></i>Login</button>
         </form>
-        <p class="text-center mt-3 small mb-0">No account yet? <a href="<?= BASE_URL ?>/register.php">Register with a referral code</a></p>
+        <p class="text-center mt-3 small mb-0">No account yet? <a href="<?= WELLNESS_URL ?>/register.php">Register with a referral code</a></p>
       </div>
     </div>
   </div>

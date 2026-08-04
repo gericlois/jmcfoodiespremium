@@ -19,17 +19,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $rebate_pct = (float) ($_POST['personal_rebate_rate'] ?? 0);
     $override_pct = (float) ($_POST['referral_override_rate'] ?? 0);
     $min_cashout = (float) ($_POST['min_cashout_amount'] ?? 0);
+    $fee_pct = (float) ($_POST['cashout_processing_fee_rate'] ?? 0);
     $company_email = trim($_POST['company_email'] ?? '');
 
     if ($rebate_pct <= 0 || $rebate_pct > 100) $errors[] = 'Personal rebate rate must be between 0 and 100%.';
     if ($override_pct <= 0 || $override_pct > 100) $errors[] = 'Referral override rate must be between 0 and 100%.';
     if ($min_cashout <= 0) $errors[] = 'Minimum cashout amount must be greater than 0.';
+    if ($fee_pct < 0 || $fee_pct > 100) $errors[] = 'Cashout processing fee must be between 0 and 100%.';
     if (!filter_var($company_email, FILTER_VALIDATE_EMAIL)) $errors[] = 'A valid company email is required.';
 
     if (empty($errors)) {
         save_setting($conn, 'personal_rebate_rate', (string) round($rebate_pct / 100, 4));
         save_setting($conn, 'referral_override_rate', (string) round($override_pct / 100, 4));
         save_setting($conn, 'min_cashout_amount', (string) round($min_cashout, 2));
+        save_setting($conn, 'cashout_processing_fee_rate', (string) round($fee_pct / 100, 4));
         save_setting($conn, 'company_email', $company_email);
         redirect('/admin/settings.php?saved=1');
     }
@@ -37,7 +40,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $rebate_rate = (float) setting($conn, 'personal_rebate_rate', 0.20);
 $override_rate = (float) setting($conn, 'referral_override_rate', 0.10);
-$min_cashout_val = (float) setting($conn, 'min_cashout_amount', 100.00);
+$min_cashout_val = (float) setting($conn, 'min_cashout_amount', 1000.00);
+$fee_rate_val = (float) setting($conn, 'cashout_processing_fee_rate', 0.10);
 $company_email_val = setting($conn, 'company_email', 'support@example.com');
 
 $page_title = 'Settings';
@@ -80,9 +84,16 @@ require __DIR__ . '/includes/admin_sidebar.php';
           </div>
 
           <h2 class="h6 mb-3 mt-2">Wallet</h2>
-          <div class="mb-3">
-            <label class="flbl">Minimum Cashout Amount (₱)</label>
-            <input type="number" step="0.01" min="0" name="min_cashout_amount" class="fctrl" value="<?= sanitize($min_cashout_val) ?>" required>
+          <div class="row">
+            <div class="col-sm-6 mb-3">
+              <label class="flbl">Minimum Cashout Amount (₱)</label>
+              <input type="number" step="0.01" min="0" name="min_cashout_amount" class="fctrl" value="<?= sanitize($min_cashout_val) ?>" required>
+            </div>
+            <div class="col-sm-6 mb-3">
+              <label class="flbl">Cashout Processing Fee (%)</label>
+              <input type="number" step="0.01" min="0" max="100" name="cashout_processing_fee_rate" class="fctrl" value="<?= sanitize($fee_rate_val * 100) ?>" required>
+              <div class="form-text">Deducted from the payout, not added to what's debited from the wallet.</div>
+            </div>
           </div>
 
           <h2 class="h6 mb-3 mt-2">Company Info</h2>

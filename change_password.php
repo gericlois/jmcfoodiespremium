@@ -14,7 +14,7 @@ $stmt->close();
 
 // Already changed? No need to be here.
 if (!$user['must_change_password']) {
-    redirect('/dashboard.php');
+    redirect(route_after_login($conn, $_SESSION['user_id']));
 }
 
 $errors = [];
@@ -44,7 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->close();
 
         $_SESSION['must_change_password'] = false;
-        redirect('/dashboard.php');
+        redirect(route_after_login($conn, $_SESSION['user_id']));
     }
 }
 

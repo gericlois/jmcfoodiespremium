@@ -48,7 +48,7 @@ require __DIR__ . '/includes/admin_sidebar.php';
           <td>#<?= (int) $o['id'] ?></td>
           <td><?= sanitize($o['full_name']) ?> <span class="text-muted small">(<?= sanitize($o['username']) ?>)</span></td>
           <td><?= format_price($o['total_amount']) ?></td>
-          <td class="text-capitalize"><?= sanitize($o['payment_method']) ?></td>
+          <td><?= sanitize(payment_method_label($o['payment_method'])) ?></td>
           <td><span class="pill pill-<?= $o['status'] ?>"><?= sanitize($o['status']) ?></span></td>
           <td><?= date('M j, Y', strtotime($o['created_at'])) ?></td>
           <td><a href="<?= BASE_URL ?>/admin/order_view.php?id=<?= (int) $o['id'] ?>" class="btn-chip btn-chip-outline">View</a></td>

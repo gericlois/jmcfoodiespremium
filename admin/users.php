@@ -31,7 +31,7 @@ require __DIR__ . '/includes/admin_sidebar.php';
 <div class="container-fluid py-4">
   <div class="table-responsive">
     <table class="table-theme">
-      <thead><tr><th>Name</th><th>Username</th><th>Referral Code</th><th>Referred By</th><th>Referrals</th><th><?= sanitize(WALLET_NAME) ?> Balance</th><th>Status</th><th>Joined</th><th></th></tr></thead>
+      <thead><tr><th>Name</th><th>Username</th><th>Referral Code</th><th>Referred By</th><th>Referrals</th><th>JMC Wallet Balance</th><th>Status</th><th>Joined</th><th></th></tr></thead>
       <tbody>
       <?php if ($users->num_rows === 0): ?>
         <tr><td colspan="9" class="text-muted">No users yet.</td></tr>

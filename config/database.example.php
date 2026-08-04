@@ -1,10 +1,11 @@
 <?php
 /*
- * DATABASE CONFIGURATION
+ * DATABASE CONFIGURATION — EXAMPLE
  * =============================================
- * Auto-detects environment:
+ * Copy this file to database.php (which is gitignored, since it holds real
+ * credentials) and fill in your own values. Auto-detects environment:
  *   - Accessed via localhost / 127.0.0.1  -> local XAMPP database
- *   - Anywhere else (deployed)            -> live database (fill in before deploy)
+ *   - Anywhere else (deployed)            -> live database
  */
 
 $host_header = $_SERVER['HTTP_HOST'] ?? '';
@@ -19,7 +20,7 @@ if ($is_local) {
     $db_name = 'referral_platform';
 } else {
     // Live (fill in with real host/credentials before deploying)
-    $db_host = 'localhost';
+    $db_host = '';
     $db_user = '';
     $db_pass = '';
     $db_name = '';

@@ -20,7 +20,7 @@
 #hero {
   background:
     linear-gradient(rgba(13, 40, 24, 0.8), rgba(13, 40, 24, 0.72)),
-    url('../img/head_bg.jpg') center/cover no-repeat;
+    url('../img/wellness/head_bg.jpg') center/cover no-repeat;
 }
 #hero .hbadge span {
   color: var(--dark);
@@ -63,7 +63,7 @@
 /* Real JMC Foodies brand palette (overrides theme.css's Sarab red/gold —
    this file loads after theme.css so these values win everywhere). */
 :root {
-  --primary: #14532d;
+  --primary: #34a853;
   --secondary: #d9a521;
   --dark: #0d2818;
   --green: #2f9e63;
@@ -185,6 +185,25 @@
 }
 .pwd-toggle:hover {
   color: var(--primary);
+}
+
+/* theme.css hardcodes .btn-red, #btt, and .nav-cta to gradient into the old
+   Sarab red (#c01e12) regardless of --primary. Flattened to a solid
+   --primary fill here (no gradient), with color-mix only for the hover/
+   shadow shade so this stays correct if --primary changes again later —
+   no second hex to keep in sync. */
+.btn-red,
+#btt,
+.nav-cta {
+  background: var(--primary);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--primary) 35%, transparent);
+}
+.nav-cta:hover {
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--primary) 40%, transparent);
+}
+.btn-red:hover,
+#btt:hover {
+  box-shadow: 0 14px 34px color-mix(in srgb, var(--primary) 45%, transparent);
 }
 
 /* Secondary/outline button to pair with .btn-red */
@@ -387,6 +406,27 @@
 .admin-nav-link.active {
   background: var(--primary);
   color: #fff;
+}
+.admin-nav-group-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: rgba(255, 255, 255, 0.35);
+  padding: 14px 14px 4px;
+}
+.admin-nav-group-label:first-child {
+  padding-top: 4px;
+}
+.admin-nav-badge {
+  margin-left: auto;
+  background: var(--secondary);
+  color: var(--dark);
+  font-size: 0.68rem;
+  font-weight: 700;
+  border-radius: 30px;
+  padding: 1px 8px;
+  line-height: 1.5;
 }
 .admin-sidebar-bottom {
   padding: 14px;

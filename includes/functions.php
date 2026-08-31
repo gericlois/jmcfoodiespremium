@@ -1,6 +1,42 @@
 <?php
+require_once __DIR__ . '/../config/sms.php';
+
 function format_price($amount) {
     return '₱' . number_format((float) $amount, 2);
+}
+
+// ---------------------------------------------------------------
+// SMS notifications (Semaphore, semaphore.co). Used by both Wellness and
+// Basics for every member-facing SMS trigger. Fails silently (returns false,
+// logs nothing to the user-facing page) rather than blocking whatever action
+// it's attached to — a failed/unsent SMS should never stop an application
+// approval, a payment being recorded, etc. Skips entirely (no API call) if
+// SEMAPHORE_API_KEY isn't configured yet, so the app works before SMS setup.
+// ---------------------------------------------------------------
+function send_sms($to, $message) {
+    if (SEMAPHORE_API_KEY === '' || trim((string) $to) === '') {
+        return false;
+    }
+
+    $params = [
+        'apikey' => SEMAPHORE_API_KEY,
+        'number' => $to,
+        'message' => $message,
+    ];
+    if (SEMAPHORE_SENDER_NAME !== '') {
+        $params['sendername'] = SEMAPHORE_SENDER_NAME;
+    }
+
+    $ch = curl_init('https://api.semaphore.co/api/v4/messages');
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($params));
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    $response = curl_exec($ch);
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    return $response !== false && $http_code >= 200 && $http_code < 300;
 }
 
 function payment_method_label($method) {
@@ -37,6 +73,51 @@ function setting($conn, $key, $default = null) {
         }
     }
     return $cache[$key] ?? $default;
+}
+
+function save_setting($conn, $key, $value) {
+    $stmt = $conn->prepare("INSERT INTO settings (setting_key, setting_value) VALUES (?, ?)
+                             ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+    $stmt->bind_param('ss', $key, $value);
+    $stmt->execute();
+    $stmt->close();
+}
+
+// ---------------------------------------------------------------
+// Admin action audit trail (admin/activity_log.php). Called from both the
+// Wellness and Basics admin panels at every meaningful mutation. Fails
+// silently on session/DB issues rather than blocking the action it's
+// logging — the log is a record, not a gate.
+// ---------------------------------------------------------------
+function log_activity($conn, $action, $description) {
+    // Wellness and Basics admins are two separate sessions/tables — check
+    // whichever one is actually active for this request.
+    $admin_id = null;
+    $admin_type = null;
+    $table = null;
+    if (function_exists('is_admin_logged_in') && is_admin_logged_in()) {
+        $admin_id = current_admin_id();
+        $admin_type = 'wellness';
+        $table = 'admins';
+    } elseif (function_exists('basics_is_admin_logged_in') && basics_is_admin_logged_in()) {
+        $admin_id = basics_current_admin_id();
+        $admin_type = 'basics';
+        $table = 'basics_admins';
+    }
+
+    $admin_name = null;
+    if ($admin_id) {
+        $stmt = $conn->prepare("SELECT name FROM $table WHERE id = ?");
+        $stmt->bind_param('i', $admin_id);
+        $stmt->execute();
+        $admin_name = $stmt->get_result()->fetch_assoc()['name'] ?? null;
+        $stmt->close();
+    }
+    $ip = $_SERVER['REMOTE_ADDR'] ?? null;
+    $stmt = $conn->prepare("INSERT INTO activity_log (admin_id, admin_type, admin_name, action, description, ip_address) VALUES (?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param('isssss', $admin_id, $admin_type, $admin_name, $action, $description, $ip);
+    $stmt->execute();
+    $stmt->close();
 }
 
 // ---------------------------------------------------------------
@@ -123,6 +204,8 @@ function update_user_status($conn, $id, $new_status) {
     $stmt->execute();
     $stmt->close();
 
+    log_activity($conn, 'update_user_status', 'Set Wellness user "' . $user['full_name'] . '" status to ' . $new_status);
+
     if ($user['status'] === 'pending' && $new_status === 'active') {
         send_account_approved_email($user['email'], $user['full_name']);
     }
@@ -193,7 +276,12 @@ function confirm_order_payment($conn, $order_id) {
     $stmt = $conn->prepare("UPDATE orders SET status = 'processing' WHERE id = ? AND status = 'pending'");
     $stmt->bind_param('i', $order_id);
     $stmt->execute();
+    $confirmed = $stmt->affected_rows > 0;
     $stmt->close();
+
+    if ($confirmed) {
+        log_activity($conn, 'confirm_order', 'Confirmed payment for Wellness order #' . $order_id);
+    }
 }
 
 // Admin marks the order delivered. This is the only place rewards are credited.
@@ -225,6 +313,8 @@ function mark_order_delivered($conn, $order_id, $admin_id) {
     $stmt->bind_param('ii', $admin_id, $order_id);
     $stmt->execute();
     $stmt->close();
+
+    log_activity($conn, 'deliver_order', 'Marked Wellness order #' . $order_id . ' as delivered');
 }
 
 // Cancels a pending/processing order. Refunds the wallet debit if it was a
@@ -257,4 +347,6 @@ function cancel_order($conn, $order_id) {
     $stmt->bind_param('i', $order_id);
     $stmt->execute();
     $stmt->close();
+
+    log_activity($conn, 'cancel_order', 'Cancelled Wellness order #' . $order_id);
 }

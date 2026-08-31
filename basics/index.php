@@ -6,14 +6,12 @@ require __DIR__ . '/../includes/auth.php';
 require __DIR__ . '/includes/module.php';
 require __DIR__ . '/includes/functions.php';
 
-if (is_logged_in()) {
-    $access = user_module_access($conn, current_user_id());
-    if ($access['basics']) {
+if (basics_is_logged_in()) {
+    $member = basics_get_member($conn, basics_current_user_id());
+    if ($member && $member['application_status'] === 'approved' && in_array($member['membership_status'], ['active', 'dormant'], true)) {
         redirect('/basics/dashboard.php');
     }
-    if ($access['basics_pending'] || $access['basics_blocked']) {
-        redirect('/basics/pending.php');
-    }
+    redirect('/basics/pending.php');
 }
 
 $page_title = 'Home';
@@ -36,7 +34,7 @@ require __DIR__ . '/../includes/navbar.php';
         </p>
         <div class="d-flex flex-wrap justify-content-center gap-3 mb-2">
           <a href="<?= BASICS_URL ?>/apply.php" class="btn-red"><i class="fas fa-file-signature"></i>Apply for Membership</a>
-          <a href="<?= BASE_URL ?>/login.php" class="btn-outline-theme"><i class="fas fa-right-to-bracket"></i>Login</a>
+          <a href="<?= BASICS_URL ?>/login.php" class="btn-outline-theme"><i class="fas fa-right-to-bracket"></i>Login</a>
         </div>
       </div>
     </div>

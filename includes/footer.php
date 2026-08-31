@@ -7,6 +7,9 @@ $module_nav_items = $module_nav_items ?? [];
 $module_guest_nav_items = $module_guest_nav_items ?? [];
 $module_register_url = $module_register_url ?? null;
 $module_footer_desc = $module_footer_desc ?? 'JMC Digital brings together JMC Foodies Wellness and JMC Foodies Basics — two ways to save, earn, and shop with JMC Foodies.';
+// Wellness and Basics have fully separate login sessions — see navbar.php.
+$module_is_logged_in = $module_name === 'JMC Foodies Basics' ? basics_is_logged_in() : is_logged_in();
+$module_login_url = $module_name === 'JMC Foodies Basics' ? BASICS_URL . '/login.php' : BASE_URL . '/login.php';
 ?>
   <footer>
     <div class="container">
@@ -21,7 +24,7 @@ $module_footer_desc = $module_footer_desc ?? 'JMC Digital brings together JMC Fo
           <div class="ftit">Quick Links</div>
           <ul class="flinks ps-0">
             <li><a href="<?= sanitize($module_home_url) ?>"><i class="fas fa-chevron-right"></i>Home</a></li>
-            <?php if (is_logged_in()): ?>
+            <?php if ($module_is_logged_in): ?>
               <?php foreach ($module_nav_items as $label => $url): ?>
                 <li><a href="<?= sanitize($url) ?>"><i class="fas fa-chevron-right"></i><?= sanitize($label) ?></a></li>
               <?php endforeach; ?>
@@ -32,7 +35,7 @@ $module_footer_desc = $module_footer_desc ?? 'JMC Digital brings together JMC Fo
               <?php if ($module_register_url): ?>
                 <li><a href="<?= sanitize($module_register_url) ?>"><i class="fas fa-chevron-right"></i>Register</a></li>
               <?php endif; ?>
-              <li><a href="<?= BASE_URL ?>/login.php"><i class="fas fa-chevron-right"></i>Login</a></li>
+              <li><a href="<?= $module_login_url ?>"><i class="fas fa-chevron-right"></i>Login</a></li>
             <?php endif; ?>
           </ul>
         </div>
@@ -42,6 +45,13 @@ $module_footer_desc = $module_footer_desc ?? 'JMC Digital brings together JMC Fo
             <div class="fciico"><i class="fas fa-envelope"></i></div>
             <div class="fciinfo"><strong>Email</strong><?= sanitize(setting($conn, 'company_email', 'support@example.com')) ?></div>
           </div>
+          <?php $company_address = setting($conn, 'company_address', ''); ?>
+          <?php if ($company_address !== ''): ?>
+            <div class="fci">
+              <div class="fciico"><i class="fas fa-location-dot"></i></div>
+              <div class="fciinfo"><strong>Address</strong><?= sanitize($company_address) ?></div>
+            </div>
+          <?php endif; ?>
         </div>
       </div>
     </div>

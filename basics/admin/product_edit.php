@@ -4,11 +4,11 @@ require __DIR__ . '/../../config/database.php';
 require __DIR__ . '/../../includes/functions.php';
 require __DIR__ . '/../../includes/auth.php';
 
-require_admin_login();
+require_basics_admin_login();
 
 $id = (int) ($_GET['id'] ?? 0);
 $product = [
-    'id' => 0, 'sku' => '', 'category' => 'Bigas', 'name' => '', 'unit' => '', 'srp' => '0', 'image' => null, 'status' => 'active',
+    'id' => 0, 'sku' => '', 'category' => 'Rice', 'name' => '', 'unit' => '', 'srp' => '0', 'image' => null, 'status' => 'active',
 ];
 if ($id) {
     $stmt = $conn->prepare("SELECT * FROM basics_products WHERE id = ?");
@@ -19,11 +19,11 @@ if ($id) {
 }
 
 $errors = [];
-$valid_categories = ['Bigas', 'Pang-almusal', 'Pang-ulam'];
+$valid_categories = ['Rice', 'Food Essentials', 'Cooking Products', 'Beverages', 'Homecare', 'Personal Care'];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $sku = trim($_POST['sku'] ?? '');
-    $category = in_array($_POST['category'] ?? '', $valid_categories, true) ? $_POST['category'] : 'Bigas';
+    $category = in_array($_POST['category'] ?? '', $valid_categories, true) ? $_POST['category'] : 'Rice';
     $name = trim($_POST['name'] ?? '');
     $unit = trim($_POST['unit'] ?? '');
     $srp = (float) ($_POST['srp'] ?? 0);
@@ -52,6 +52,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->bind_param('ssssdssi', $sku, $category, $name, $unit, $srp, $image, $status, $id);
             $stmt->execute();
             $stmt->close();
+            log_activity($conn, 'update_basics_product', 'Updated Basics product "' . $name . '" (' . $sku . ')');
             redirect('/basics/admin/product_edit.php?id=' . $id . '&saved=1');
         } else {
             $stmt = $conn->prepare("INSERT INTO basics_products (sku, category, name, unit, srp, image, status) VALUES (?,?,?,?,?,?,?)");
@@ -59,6 +60,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute();
             $new_id = $stmt->insert_id;
             $stmt->close();
+            log_activity($conn, 'create_basics_product', 'Created Basics product "' . $name . '" (' . $sku . ')');
             redirect('/basics/admin/product_edit.php?id=' . $new_id . '&saved=1');
         }
     }
@@ -67,7 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $page_title = $id ? 'Edit Product' : 'Add Product';
 require __DIR__ . '/../../admin/includes/admin_header.php';
-require __DIR__ . '/../../admin/includes/admin_sidebar.php';
+require __DIR__ . '/includes/admin_sidebar.php';
 ?>
 <div class="inner-hero" style="padding:36px 0;">
   <div class="container">

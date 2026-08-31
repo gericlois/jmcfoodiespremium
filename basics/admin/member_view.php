@@ -5,7 +5,7 @@ require __DIR__ . '/../../includes/functions.php';
 require __DIR__ . '/../../includes/auth.php';
 require __DIR__ . '/../includes/functions.php';
 
-require_admin_login();
+require_basics_admin_login();
 
 $id = (int) ($_GET['id'] ?? 0);
 
@@ -25,27 +25,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $stmt->execute();
         $stmt->close();
+        log_activity($conn, 'update_basics_credit', 'Updated credit line for Basics member #' . $id . ' (weekly ' . format_price($weekly_limit) . ', emergency ' . format_price($emergency_limit) . ')');
     } elseif ($action === 'suspend') {
         $stmt = $conn->prepare("UPDATE basics_members SET membership_status = 'suspended' WHERE id = ?");
         $stmt->bind_param('i', $id);
         $stmt->execute();
         $stmt->close();
+        log_activity($conn, 'suspend_basics_member', 'Suspended Basics member #' . $id);
     } elseif ($action === 'reinstate') {
         $stmt = $conn->prepare("UPDATE basics_members SET membership_status = 'active', suspended_until = NULL WHERE id = ?");
         $stmt->bind_param('i', $id);
         $stmt->execute();
         $stmt->close();
+        log_activity($conn, 'reinstate_basics_member', 'Reinstated Basics member #' . $id);
     } elseif ($action === 'terminate') {
         $stmt = $conn->prepare("UPDATE basics_members SET membership_status = 'terminated' WHERE id = ?");
         $stmt->bind_param('i', $id);
         $stmt->execute();
         $stmt->close();
+        log_activity($conn, 'terminate_basics_member', 'Terminated Basics member #' . $id);
     }
     redirect('/basics/admin/member_view.php?id=' . $id);
 }
 
 $stmt = $conn->prepare("SELECT bm.*, u.full_name, u.username, u.email, u.contact_number
-                         FROM basics_members bm JOIN users u ON u.id = bm.user_id WHERE bm.id = ?");
+                         FROM basics_members bm JOIN basics_users u ON u.id = bm.user_id WHERE bm.id = ?");
 $stmt->bind_param('i', $id);
 $stmt->execute();
 $member = $stmt->get_result()->fetch_assoc();
@@ -71,7 +75,7 @@ $payments = $stmt->get_result();
 
 $page_title = $member['full_name'];
 require __DIR__ . '/../../admin/includes/admin_header.php';
-require __DIR__ . '/../../admin/includes/admin_sidebar.php';
+require __DIR__ . '/includes/admin_sidebar.php';
 ?>
 <div class="inner-hero" style="padding:36px 0;">
   <div class="container">

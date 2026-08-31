@@ -4,7 +4,7 @@ require __DIR__ . '/../../config/database.php';
 require __DIR__ . '/../../includes/functions.php';
 require __DIR__ . '/../../includes/auth.php';
 
-require_admin_login();
+require_basics_admin_login();
 
 $errors = [];
 
@@ -26,6 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
         $stmt->bind_param('ssssss', $label, $order_open_date, $order_cutoff_date, $payment_start_date, $payment_due_date, $delivery_date);
         $stmt->execute();
         $stmt->close();
+        log_activity($conn, 'create_basics_cycle', 'Created Basics cycle "' . $label . '" (' . $order_open_date . ' to ' . $order_cutoff_date . ')');
         redirect('/basics/admin/cycles.php');
     }
 }
@@ -43,7 +44,7 @@ $default_delivery = date('Y-m-d', strtotime($next_monday . ' +7 days'));
 
 $page_title = 'Weekly Cycles';
 require __DIR__ . '/../../admin/includes/admin_header.php';
-require __DIR__ . '/../../admin/includes/admin_sidebar.php';
+require __DIR__ . '/includes/admin_sidebar.php';
 ?>
 <div class="inner-hero" style="padding:36px 0;">
   <div class="container">
@@ -95,6 +96,9 @@ require __DIR__ . '/../../admin/includes/admin_sidebar.php';
     </div>
 
     <div class="col-12 col-lg-7">
+      <div class="d-flex justify-content-end mb-3">
+        <button type="button" class="btn-outline-theme no-print" onclick="window.print()"><i class="fas fa-print"></i>Print</button>
+      </div>
       <div class="table-responsive">
         <table class="table-theme">
           <thead><tr><th>Label</th><th>Order Window</th><th>Payment Window</th><th>Delivery</th></tr></thead>

@@ -4,12 +4,12 @@ require __DIR__ . '/../../config/database.php';
 require __DIR__ . '/../../includes/functions.php';
 require __DIR__ . '/../../includes/auth.php';
 
-require_admin_login();
+require_basics_admin_login();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delete') {
     $id = (int) $_POST['id'];
 
-    $stmt = $conn->prepare("SELECT image FROM basics_products WHERE id = ?");
+    $stmt = $conn->prepare("SELECT name, image FROM basics_products WHERE id = ?");
     $stmt->bind_param('i', $id);
     $stmt->execute();
     $product = $stmt->get_result()->fetch_assoc();
@@ -21,6 +21,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delet
         $stmt->execute();
         $stmt->close();
 
+        log_activity($conn, 'delete_basics_product', 'Deleted Basics product "' . ($product['name'] ?? "#$id") . '"');
+
         if ($product && $product['image'] && is_file(UPLOAD_PATH . 'basics_products/' . $product['image'])) {
             unlink(UPLOAD_PATH . 'basics_products/' . $product['image']);
         }
@@ -31,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delet
 }
 
 $category_filter = $_GET['category'] ?? '';
-$valid_categories = ['Bigas', 'Pang-almusal', 'Pang-ulam'];
+$valid_categories = ['Rice', 'Food Essentials', 'Cooking Products', 'Beverages', 'Homecare', 'Personal Care'];
 $sql = "SELECT * FROM basics_products";
 if (in_array($category_filter, $valid_categories, true)) {
     $sql .= " WHERE category = '" . $conn->real_escape_string($category_filter) . "'";
@@ -41,7 +43,7 @@ $products = $conn->query($sql);
 
 $page_title = 'Basics Products';
 require __DIR__ . '/../../admin/includes/admin_header.php';
-require __DIR__ . '/../../admin/includes/admin_sidebar.php';
+require __DIR__ . '/includes/admin_sidebar.php';
 ?>
 <div class="inner-hero" style="padding:36px 0;">
   <div class="container">
@@ -58,12 +60,15 @@ require __DIR__ . '/../../admin/includes/admin_sidebar.php';
         <a href="<?= BASE_URL ?>/basics/admin/products.php?category=<?= urlencode($cat) ?>" class="filter-pill <?= $category_filter === $cat ? 'active' : '' ?>"><?= sanitize($cat) ?></a>
       <?php endforeach; ?>
     </div>
-    <a href="<?= BASE_URL ?>/basics/admin/product_edit.php" class="btn-red"><i class="fas fa-plus"></i>Add Product</a>
+    <div class="d-flex gap-2">
+      <button type="button" class="btn-outline-theme no-print" onclick="window.print()"><i class="fas fa-print"></i>Print</button>
+      <a href="<?= BASE_URL ?>/basics/admin/product_edit.php" class="btn-red"><i class="fas fa-plus"></i>Add Product</a>
+    </div>
   </div>
 
   <div class="table-responsive">
     <table class="table-theme">
-      <thead><tr><th>Photo</th><th>SKU</th><th>Category</th><th>Name</th><th>Unit</th><th>SRP</th><th>Status</th><th></th></tr></thead>
+      <thead><tr><th>Photo</th><th>SKU</th><th>Category</th><th>Name</th><th>Unit</th><th>SRP</th><th>Status</th><th class="no-print"></th></tr></thead>
       <tbody>
       <?php if ($products->num_rows === 0): ?>
         <tr><td colspan="8" class="text-muted">No products found.</td></tr>
@@ -83,7 +88,7 @@ require __DIR__ . '/../../admin/includes/admin_sidebar.php';
           <td><?= sanitize($p['unit']) ?></td>
           <td><?= $p['srp'] > 0 ? format_price($p['srp']) : '<span class="text-muted">TBD</span>' ?></td>
           <td><span class="pill pill-<?= $p['status'] === 'active' ? 'completed' : 'cancelled' ?>"><?= sanitize($p['status']) ?></span></td>
-          <td>
+          <td class="no-print">
             <a href="<?= BASE_URL ?>/basics/admin/product_edit.php?id=<?= (int) $p['id'] ?>" class="btn-chip btn-chip-outline">Edit</a>
             <form method="post" class="d-inline">
               <input type="hidden" name="action" value="delete">

@@ -5,7 +5,7 @@ require __DIR__ . '/../../includes/functions.php';
 require __DIR__ . '/../../includes/auth.php';
 require __DIR__ . '/../includes/functions.php';
 
-require_admin_login();
+require_basics_admin_login();
 
 $errors = [];
 
@@ -20,7 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'recor
     } else {
         $conn->begin_transaction();
         try {
-            $result = basics_record_payment($conn, $order_id, $amount_paid, $paid_at, current_admin_id(), $notes);
+            $result = basics_record_payment($conn, $order_id, $amount_paid, $paid_at, basics_current_admin_id(), $notes);
             $conn->commit();
             redirect('/basics/admin/order_view.php?id=' . $order_id . '&recorded=1');
         } catch (Exception $e) {
@@ -36,7 +36,7 @@ $stmt = $conn->prepare("SELECT o.*, u.full_name, u.username, c.label AS cycle_la
                                 (SELECT COALESCE(SUM(amount_paid),0) FROM basics_payments p WHERE p.order_id = o.id) AS amount_paid
                          FROM basics_orders o
                          JOIN basics_members bm ON bm.id = o.member_id
-                         JOIN users u ON u.id = bm.user_id
+                         JOIN basics_users u ON u.id = bm.user_id
                          JOIN basics_cycles c ON c.id = o.cycle_id
                          WHERE o.status = 'placed'
                          HAVING amount_paid < o.total_amount
@@ -46,7 +46,7 @@ $awaiting = $stmt->get_result();
 
 $page_title = 'Record Payment';
 require __DIR__ . '/../../admin/includes/admin_header.php';
-require __DIR__ . '/../../admin/includes/admin_sidebar.php';
+require __DIR__ . '/includes/admin_sidebar.php';
 ?>
 <div class="inner-hero" style="padding:36px 0;">
   <div class="container">

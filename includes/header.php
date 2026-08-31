@@ -26,6 +26,7 @@ if ($module_name === 'JMC Foodies Wellness') {
 }
 ?>
 <title><?= isset($page_title) ? sanitize($page_title) . ' - ' . $title_suffix : $title_suffix ?></title>
+<link rel="icon" type="image/png" sizes="192x192" href="<?= $pwa_icon_dir ?>/icon-192.png">
 <link rel="manifest" href="<?= $pwa_manifest_url ?>">
 <meta name="theme-color" content="<?= $pwa_theme_color ?>">
 <link rel="apple-touch-icon" href="<?= $pwa_icon_dir ?>/icon-192.png">
@@ -36,8 +37,8 @@ if ($module_name === 'JMC Foodies Wellness') {
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Poppins:wght@300;400;500;600;700&family=Dancing+Script:wght@700&display=swap" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
-<link href="<?= BASE_URL ?>/assets/css/theme.css" rel="stylesheet">
-<link href="<?= BASE_URL ?>/assets/css/style.css" rel="stylesheet">
+<link href="<?= BASE_URL ?>/assets/css/theme.css?v=<?= @filemtime(__DIR__ . '/../assets/css/theme.css') ?>" rel="stylesheet">
+<link href="<?= BASE_URL ?>/assets/css/style.css?v=<?= @filemtime(__DIR__ . '/../assets/css/style.css') ?>" rel="stylesheet">
 <style>
 /* Page-header banner (.inner-hero) uses the same photo as the homepage
    hero, instead of a flat color. A light scrim keeps the existing dark

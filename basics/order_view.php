@@ -8,7 +8,7 @@ require __DIR__ . '/includes/functions.php';
 
 require_basics_access($conn);
 
-$member = basics_get_member($conn, current_user_id());
+$member = basics_get_member($conn, basics_current_user_id());
 $id = (int) ($_GET['id'] ?? 0);
 
 $stmt = $conn->prepare("SELECT o.*, c.label AS cycle_label, c.payment_due_date, c.delivery_date FROM basics_orders o

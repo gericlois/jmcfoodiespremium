@@ -8,7 +8,7 @@ require __DIR__ . '/includes/functions.php';
 
 require_basics_access($conn);
 
-$member = basics_get_member($conn, current_user_id());
+$member = basics_get_member($conn, basics_current_user_id());
 $outstanding = basics_outstanding_balance($conn, $member['id']);
 $available = basics_credit_available($conn, $member);
 $cycle = basics_active_order_cycle($conn);
@@ -79,6 +79,9 @@ require __DIR__ . '/../includes/navbar.php';
           <a href="<?= BASICS_URL ?>/catalog.php" class="btn-red justify-content-center"><i class="fas fa-basket-shopping"></i>Browse Catalog</a>
           <a href="<?= BASICS_URL ?>/cart.php" class="btn-outline-theme justify-content-center"><i class="fas fa-cart-shopping"></i>Go to Cart</a>
           <a href="<?= BASICS_URL ?>/payments.php" class="btn-outline-theme justify-content-center"><i class="fas fa-receipt"></i>Payment History</a>
+          <a href="<?= BASICS_URL ?>/emergency_credit.php" class="btn-outline-theme justify-content-center"><i class="fas fa-hand-holding-dollar"></i>Emergency Cash Credit</a>
+          <a href="<?= BASICS_URL ?>/benefits.php" class="btn-outline-theme justify-content-center"><i class="fas fa-hand-holding-heart"></i>Member Benefits</a>
+          <a href="<?= BASICS_URL ?>/change_password.php" class="btn-outline-theme justify-content-center"><i class="fas fa-key"></i>Change Password</a>
         </div>
       </div>
     </div>
@@ -119,7 +122,10 @@ require __DIR__ . '/../includes/navbar.php';
 
       <div class="panel-card text-center">
         <h2 class="h6 mb-3">Member Benefits</h2>
-        <img src="<?= BASE_URL ?>/assets/img/basics/JMCBasics_catalog.jpg" alt="JMC Foodies Basics membership benefits" class="highlight-poster" style="max-width:600px;">
+        <img src="<?= BASE_URL ?>/assets/img/basics/JMCBasics_catalog.jpg" alt="JMC Foodies Basics membership benefits" class="highlight-poster mb-3" style="max-width:600px;">
+        <div>
+          <a href="<?= BASICS_URL ?>/benefits.php" class="btn-red justify-content-center"><i class="fas fa-hand-holding-heart"></i>Request Assistance</a>
+        </div>
       </div>
     </div>
   </div>

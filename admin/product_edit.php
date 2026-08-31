@@ -75,6 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
             $stmt->bind_param('ssdssi', $name, $description, $srp, $image, $status, $id);
             $stmt->execute();
             $stmt->close();
+            log_activity($conn, 'update_product', 'Updated Wellness product "' . $name . '"');
             redirect('/admin/product_edit.php?id=' . $id . '&saved=1');
         } else {
             $stmt = $conn->prepare("INSERT INTO products (name, description, srp, image, status) VALUES (?,?,?,?,?)");
@@ -82,6 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save'
             $stmt->execute();
             $new_id = $stmt->insert_id;
             $stmt->close();
+            log_activity($conn, 'create_product', 'Created Wellness product "' . $name . '"');
             redirect('/admin/product_edit.php?id=' . $new_id . '&saved=1');
         }
     }

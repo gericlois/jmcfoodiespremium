@@ -8,7 +8,7 @@ require __DIR__ . '/includes/functions.php';
 
 require_basics_access($conn);
 
-$member = basics_get_member($conn, current_user_id());
+$member = basics_get_member($conn, basics_current_user_id());
 $cycle = basics_active_order_cycle($conn);
 $errors = [];
 
@@ -60,6 +60,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $order) {
                 $stmt->bind_param('i', $member['id']);
                 $stmt->execute();
                 $stmt->close();
+
+                basics_notify($conn, $member, "Hi {$member['full_name']}, we've received your order of " . format_price($order['total_amount']) . ". Delivery takes place on " . date('M j, Y', strtotime($cycle['delivery_date'])) . ". - JMC Foodies Basics");
 
                 redirect('/basics/orders.php?placed=1');
             }

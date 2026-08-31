@@ -4,7 +4,10 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 // ---------------------------------------------------------------
-// User auth
+// JMC Foodies Wellness — member auth (users table)
+// Wellness and Basics are fully separate account systems: separate tables,
+// separate login pages, separate sessions. See the "Basics — member auth"
+// section below for its parallel. There is no shared login between them.
 // ---------------------------------------------------------------
 function is_logged_in() {
     return isset($_SESSION['user_id']);
@@ -14,7 +17,7 @@ function current_user_id() {
     return $_SESSION['user_id'] ?? null;
 }
 
-// Use on every user-facing page except change_password.php and logout.php.
+// Use on every Wellness user-facing page except change_password.php and logout.php.
 // Also enforces the forced-password-change gate.
 function require_login($conn) {
     if (!is_logged_in()) {
@@ -50,77 +53,22 @@ function require_valid_session_user($conn) {
     }
 }
 
-// ---------------------------------------------------------------
-// JMC Digital: one login, two modules (Wellness / Basics). A user can have
-// either, both, or (mid-application) neither yet.
-// ---------------------------------------------------------------
-function user_module_access($conn, $user_id) {
-    $stmt = $conn->prepare("SELECT u.status, u.wellness_enrolled,
-                                    bm.application_status AS basics_app,
-                                    bm.membership_status AS basics_mem
-                             FROM users u
-                             LEFT JOIN basics_members bm ON bm.user_id = u.id
-                             WHERE u.id = ?");
-    $stmt->bind_param('i', $user_id);
-    $stmt->execute();
-    $row = $stmt->get_result()->fetch_assoc();
-    $stmt->close();
-
-    if (!$row) {
-        return ['wellness' => false, 'wellness_pending' => false, 'basics' => false, 'basics_pending' => false, 'basics_blocked' => false];
-    }
-
-    return [
-        'wellness'         => (bool) $row['wellness_enrolled'] && $row['status'] === 'active',
-        'wellness_pending' => (bool) $row['wellness_enrolled'] && $row['status'] === 'pending',
-        'basics'           => $row['basics_app'] === 'approved' && in_array($row['basics_mem'], ['active', 'dormant'], true),
-        'basics_pending'   => $row['basics_app'] === 'pending',
-        'basics_blocked'   => in_array($row['basics_mem'], ['suspended', 'terminated'], true) || $row['basics_app'] === 'denied',
-    ];
-}
-
-// Use on every Wellness page instead of require_login().
+// Kept as the name every wellness/*.php page already calls — Wellness no
+// longer shares its account table with Basics, so this is now just
+// require_login() under its established name (avoids touching every caller).
 function require_wellness_access($conn) {
     require_login($conn);
-    if (!user_module_access($conn, current_user_id())['wellness']) {
-        redirect('/index.php');
-    }
 }
 
-// Use on every Basics page instead of require_login().
-function require_basics_access($conn) {
-    require_login($conn);
-    $access = user_module_access($conn, current_user_id());
-    if ($access['basics_pending'] || $access['basics_blocked']) {
-        redirect('/basics/pending.php');
-    }
-    if (!$access['basics']) {
-        redirect('/index.php');
-    }
-}
-
-// Where to send someone right after a successful login (or when they land on
-// the hub already logged in). Both modules -> hub (let them choose). Exactly
-// one -> straight into it. Basics still pending/blocked -> its holding page.
+// Every Wellness login now goes straight to the Wellness dashboard — kept as
+// a named function (rather than inlining the path at each call site) since
+// login.php/register.php/change_password.php all call it.
 function route_after_login($conn, $user_id) {
-    $access = user_module_access($conn, $user_id);
-    if ($access['wellness'] && $access['basics']) {
-        return '/index.php';
-    }
-    if ($access['wellness']) {
-        return '/wellness/dashboard.php';
-    }
-    if ($access['basics']) {
-        return '/basics/dashboard.php';
-    }
-    if ($access['basics_pending'] || $access['basics_blocked']) {
-        return '/basics/pending.php';
-    }
-    return '/index.php';
+    return '/wellness/dashboard.php';
 }
 
 // ---------------------------------------------------------------
-// Admin auth
+// JMC Foodies Wellness — admin auth (admins table)
 // ---------------------------------------------------------------
 function is_admin_logged_in() {
     return isset($_SESSION['admin_id']);
@@ -133,5 +81,79 @@ function current_admin_id() {
 function require_admin_login() {
     if (!is_admin_logged_in()) {
         redirect('/admin/login.php');
+    }
+}
+
+// ---------------------------------------------------------------
+// JMC Foodies Basics — member auth (basics_users table). Independent
+// session keys from Wellness's, so the two can never collide.
+// ---------------------------------------------------------------
+function basics_is_logged_in() {
+    return isset($_SESSION['basics_user_id']);
+}
+
+function basics_current_user_id() {
+    return $_SESSION['basics_user_id'] ?? null;
+}
+
+function require_basics_login($conn) {
+    if (!basics_is_logged_in()) {
+        redirect('/basics/login.php');
+    }
+    require_valid_basics_session_user($conn);
+    if (!empty($_SESSION['basics_must_change_password'])) {
+        redirect('/basics/change_password.php');
+    }
+}
+
+function require_basics_login_only($conn) {
+    if (!basics_is_logged_in()) {
+        redirect('/basics/login.php');
+    }
+    require_valid_basics_session_user($conn);
+}
+
+function require_valid_basics_session_user($conn) {
+    $stmt = $conn->prepare("SELECT id FROM basics_users WHERE id = ?");
+    $stmt->bind_param('i', $_SESSION['basics_user_id']);
+    $stmt->execute();
+    $exists = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$exists) {
+        session_unset();
+        session_destroy();
+        redirect('/basics/login.php');
+    }
+}
+
+// Use on every Basics member page instead of require_basics_login() alone —
+// also redirects to the holding page while the membership application is
+// still pending, denied, suspended, or terminated.
+function require_basics_access($conn) {
+    require_basics_login($conn);
+    $member = basics_get_member($conn, basics_current_user_id());
+    if (!$member) {
+        redirect('/basics/apply.php');
+    }
+    if ($member['application_status'] !== 'approved' || !in_array($member['membership_status'], ['active', 'dormant'], true)) {
+        redirect('/basics/pending.php');
+    }
+}
+
+// ---------------------------------------------------------------
+// JMC Foodies Basics — admin auth (basics_admins table), fully separate
+// from the Wellness admin login/session above.
+// ---------------------------------------------------------------
+function basics_is_admin_logged_in() {
+    return isset($_SESSION['basics_admin_id']);
+}
+
+function basics_current_admin_id() {
+    return $_SESSION['basics_admin_id'] ?? null;
+}
+
+function require_basics_admin_login() {
+    if (!basics_is_admin_logged_in()) {
+        redirect('/basics/admin/login.php');
     }
 }

@@ -8,7 +8,7 @@ require __DIR__ . '/includes/functions.php';
 
 require_basics_access($conn);
 
-$member = basics_get_member($conn, current_user_id());
+$member = basics_get_member($conn, basics_current_user_id());
 $cycle = basics_active_order_cycle($conn);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_to_cart') {
@@ -77,12 +77,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_t
 }
 
 $category_filter = $_GET['category'] ?? '';
-$valid_categories = ['Bigas', 'Pang-almusal', 'Pang-ulam'];
+$valid_categories = ['Rice', 'Food Essentials', 'Cooking Products', 'Beverages', 'Homecare', 'Personal Care'];
 $sql = "SELECT * FROM basics_products WHERE status = 'active'";
 if (in_array($category_filter, $valid_categories, true)) {
     $sql .= " AND category = '" . $conn->real_escape_string($category_filter) . "'";
 }
-$sql .= " ORDER BY category ASC, name ASC";
+$sql .= " ORDER BY name ASC";
 $products = $conn->query($sql);
 
 $page_title = 'Catalog';
@@ -100,59 +100,97 @@ require __DIR__ . '/../includes/navbar.php';
 
 <div class="shop-bg py-5">
   <div class="container">
-    <?php if (!$cycle): ?>
-      <div class="errmsg mb-4">
-        <p class="mb-0">No ordering window is open right now &mdash; you can browse, but adding to cart is disabled until Monday.</p>
-      </div>
-    <?php endif; ?>
     <?php if (isset($_GET['added'])): ?>
       <div class="sucmsg is-visible mb-4"><p>Added to cart! <a href="<?= BASICS_URL ?>/cart.php">View Cart</a></p></div>
     <?php endif; ?>
 
-    <div class="mb-3">
-      <div class="position-relative">
-        <input type="text" id="catalogSearch" class="fctrl" placeholder="Search by product name or SKU..." style="padding-left:40px;" autocomplete="off">
-        <i class="fas fa-magnifying-glass" style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:#999;"></i>
-      </div>
-    </div>
-
-    <div class="d-flex flex-wrap gap-2 mb-4">
-      <a href="<?= BASICS_URL ?>/catalog.php" class="filter-pill <?= $category_filter === '' ? 'active' : '' ?>">All</a>
-      <?php foreach ($valid_categories as $cat): ?>
-        <a href="<?= BASICS_URL ?>/catalog.php?category=<?= urlencode($cat) ?>" class="filter-pill <?= $category_filter === $cat ? 'active' : '' ?>"><?= sanitize($cat) ?></a>
-      <?php endforeach; ?>
-    </div>
-
-    <p id="catalogNoResults" class="text-muted" style="display:none;">No products match your search.</p>
-
-    <div class="row g-4" id="catalogGrid">
-      <?php if ($products->num_rows === 0): ?>
-        <p class="text-muted">No products in this category yet.</p>
+    <div class="d-flex flex-wrap align-items-center gap-3 mb-4">
+      <?php if (!$cycle): ?>
+        <div class="errmsg mb-0 flex-grow-1">
+          <p class="mb-0">No ordering window is open right now &mdash; you can browse, but adding to cart is disabled until Monday.</p>
+        </div>
       <?php endif; ?>
-      <?php while ($product = $products->fetch_assoc()): ?>
-        <div class="col-6 col-md-3 catalog-item" data-name="<?= sanitize(strtolower($product['name'])) ?>" data-sku="<?= sanitize(strtolower($product['sku'])) ?>">
-          <div class="panel-card catalog-card h-100 d-flex flex-column p-0 overflow-hidden">
+      <button type="button" class="btn-outline-theme" data-bs-toggle="collapse" data-bs-target="#scheduleInfo"><i class="fas fa-calendar-week"></i>Ordering Schedule</button>
+    </div>
+
+    <div class="collapse mb-4" id="scheduleInfo">
+        <div class="panel-card">
+          <div class="row g-3 text-center">
+            <div class="col-6 col-md-3">
+              <div class="stat-tile h-100">
+                <div class="stat-lbl mb-1">Monday–Thursday</div>
+                <div class="fw-bold">Order Placement</div>
+              </div>
+            </div>
+            <div class="col-6 col-md-3">
+              <div class="stat-tile h-100">
+                <div class="stat-lbl mb-1">Friday</div>
+                <div class="fw-bold">Check-out Cut-off</div>
+              </div>
+            </div>
+            <div class="col-6 col-md-3">
+              <div class="stat-tile h-100">
+                <div class="stat-lbl mb-1">Saturday–Sunday</div>
+                <div class="fw-bold">Payment Period</div>
+              </div>
+            </div>
+            <div class="col-6 col-md-3">
+              <div class="stat-tile h-100">
+                <div class="stat-lbl mb-1">Sunday–Monday</div>
+                <div class="fw-bold">Delivery</div>
+              </div>
+            </div>
+          </div>
+          <p class="text-muted small mb-0 mt-3">Delivery happens upon successful payment. Add items to your cart any time — they'll place once a Monday–Thursday ordering window is open.</p>
+        </div>
+    </div>
+
+    <div class="panel-card">
+      <div class="mb-3">
+        <div class="position-relative">
+          <input type="text" id="catalogSearch" class="fctrl" placeholder="Search by product name or SKU..." style="padding-left:40px;" autocomplete="off">
+          <i class="fas fa-magnifying-glass" style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:#999;"></i>
+        </div>
+      </div>
+
+      <div class="d-flex flex-wrap gap-2 mb-4">
+        <a href="<?= BASICS_URL ?>/catalog.php" class="filter-pill <?= $category_filter === '' ? 'active' : '' ?>">All</a>
+        <?php foreach ($valid_categories as $cat): ?>
+          <a href="<?= BASICS_URL ?>/catalog.php?category=<?= urlencode($cat) ?>" class="filter-pill <?= $category_filter === $cat ? 'active' : '' ?>"><?= sanitize($cat) ?></a>
+        <?php endforeach; ?>
+      </div>
+
+      <p id="catalogNoResults" class="text-muted" style="display:none;">No products match your search.</p>
+
+      <div class="basics-catalog-grid" id="catalogGrid">
+        <?php if ($products->num_rows === 0): ?>
+          <p class="text-muted">No products found.</p>
+        <?php endif; ?>
+        <?php while ($product = $products->fetch_assoc()): ?>
+          <div class="basics-product-card catalog-item" data-name="<?= sanitize(strtolower($product['name'])) ?>" data-sku="<?= sanitize(strtolower($product['sku'])) ?>">
             <?php if ($product['image']): ?>
-              <img src="<?= UPLOAD_URL ?>basics_products/<?= sanitize($product['image']) ?>" alt="<?= sanitize($product['name']) ?>" class="product-photo">
+              <img src="<?= UPLOAD_URL ?>basics_products/<?= sanitize($product['image']) ?>" alt="<?= sanitize($product['name']) ?>" class="basics-product-tile">
+            <?php else: ?>
+              <div class="basics-product-tile-empty"><i class="fas fa-basket-shopping"></i></div>
             <?php endif; ?>
-            <div class="p-3 d-flex flex-column flex-grow-1 text-center">
-              <div class="small text-muted mb-1"><?= sanitize($product['unit']) ?></div>
-              <h3 class="h6 mb-2"><?= sanitize($product['name']) ?></h3>
-              <div class="fw-bold mb-3" style="color:var(--primary);">
+            <div class="basics-product-body">
+              <div class="basics-product-name"><?= sanitize($product['name']) ?></div>
+              <div class="basics-product-unit"><?= sanitize($product['unit']) ?></div>
+              <div class="basics-product-price">
                 <?= $product['srp'] > 0 ? format_price($product['srp']) : 'TBD' ?>
               </div>
               <?php if ($cycle && $product['srp'] > 0): ?>
-                <form method="post" class="mt-auto d-flex gap-2">
+                <form method="post" class="basics-product-cart-row">
                   <input type="hidden" name="action" value="add_to_cart">
                   <input type="hidden" name="product_id" value="<?= (int) $product['id'] ?>">
-                  <input type="number" name="quantity" value="1" min="1" class="fctrl" style="width:64px;">
-                  <button type="submit" class="btn-red flex-grow-1 justify-content-center"><i class="fas fa-cart-plus"></i></button>
+                  <input type="number" name="quantity" value="1" min="1" class="fctrl">
+                  <button type="submit" class="btn-red"><i class="fas fa-cart-plus"></i></button>
                 </form>
               <?php endif; ?>
             </div>
           </div>
-        </div>
-      <?php endwhile; ?>
+        <?php endwhile; ?>
+      </div>
     </div>
   </div>
 </div>

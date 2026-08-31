@@ -3,8 +3,9 @@ require __DIR__ . '/../../config/constants.php';
 require __DIR__ . '/../../config/database.php';
 require __DIR__ . '/../../includes/functions.php';
 require __DIR__ . '/../../includes/auth.php';
+require __DIR__ . '/../includes/functions.php';
 
-require_admin_login();
+require_basics_admin_login();
 
 $id = (int) ($_GET['id'] ?? 0);
 
@@ -12,14 +13,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'deliv
     $stmt = $conn->prepare("UPDATE basics_orders SET status = 'delivered', delivered_at = NOW() WHERE id = ? AND status = 'placed'");
     $stmt->bind_param('i', $id);
     $stmt->execute();
+    $delivered = $stmt->affected_rows > 0;
     $stmt->close();
+    if ($delivered) {
+        log_activity($conn, 'deliver_basics_order', 'Marked Basics order #' . $id . ' as delivered');
+        $stmt = $conn->prepare("SELECT payment_due_date FROM basics_orders o JOIN basics_cycles c ON c.id = o.cycle_id WHERE o.id = ?");
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        $due_date = $stmt->get_result()->fetch_assoc()['payment_due_date'] ?? null;
+        $stmt->close();
+        $member = basics_member_by_order_id($conn, $id);
+        if ($member && $due_date) {
+            basics_notify($conn, $member, "Hi {$member['full_name']}, your order has been delivered! Please settle your balance by " . date('M j, Y', strtotime($due_date)) . ". - JMC Foodies Basics");
+        }
+    }
     redirect('/basics/admin/order_view.php?id=' . $id);
 }
 
 $stmt = $conn->prepare("SELECT o.*, u.full_name, u.username, c.label AS cycle_label, c.payment_due_date
                          FROM basics_orders o
                          JOIN basics_members bm ON bm.id = o.member_id
-                         JOIN users u ON u.id = bm.user_id
+                         JOIN basics_users u ON u.id = bm.user_id
                          JOIN basics_cycles c ON c.id = o.cycle_id
                          WHERE o.id = ?");
 $stmt->bind_param('i', $id);
@@ -47,7 +61,7 @@ $amount_paid = (float) $conn->query("SELECT COALESCE(SUM(amount_paid),0) AS s FR
 
 $page_title = 'Order #' . $order['id'];
 require __DIR__ . '/../../admin/includes/admin_header.php';
-require __DIR__ . '/../../admin/includes/admin_sidebar.php';
+require __DIR__ . '/includes/admin_sidebar.php';
 ?>
 <div class="inner-hero" style="padding:36px 0;">
   <div class="container">

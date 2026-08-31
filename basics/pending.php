@@ -6,9 +6,9 @@ require __DIR__ . '/../includes/auth.php';
 require __DIR__ . '/includes/module.php';
 require __DIR__ . '/includes/functions.php';
 
-require_login($conn);
+require_basics_login($conn);
 
-$member = basics_get_member($conn, current_user_id());
+$member = basics_get_member($conn, basics_current_user_id());
 if (!$member) {
     redirect('/basics/apply.php');
 }

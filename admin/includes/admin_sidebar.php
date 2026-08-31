@@ -1,26 +1,18 @@
 <?php
 $admin_shell_open = true;
 
-// Path-based (not basename) active-link match — basics/admin/products.php and
-// admin/products.php share a basename, so basename-only matching would
-// collide between the two modules' sidebar entries.
 $current_path = BASE_URL !== '' && strpos($_SERVER['REQUEST_URI'], BASE_URL) === 0
     ? substr(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), strlen(BASE_URL))
     : parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 
 // Detail/edit sub-pages highlight their parent list page in the sidebar.
 $sub_to_parent = [
-    '/admin/order_view.php'          => '/admin/orders.php',
-    '/admin/user_view.php'           => '/admin/users.php',
-    '/admin/product_edit.php'        => '/admin/products.php',
-    '/basics/admin/application_view.php' => '/basics/admin/applications.php',
-    '/basics/admin/member_view.php'  => '/basics/admin/members.php',
-    '/basics/admin/product_edit.php' => '/basics/admin/products.php',
-    '/basics/admin/order_view.php'   => '/basics/admin/orders.php',
+    '/admin/order_view.php'   => '/admin/orders.php',
+    '/admin/user_view.php'    => '/admin/users.php',
+    '/admin/product_edit.php' => '/admin/products.php',
 ];
 $current_path = $sub_to_parent[$current_path] ?? $current_path;
 
-$pending_basics_count = (int) $conn->query("SELECT COUNT(*) AS c FROM basics_members WHERE application_status = 'pending'")->fetch_assoc()['c'];
 $pending_wellness_users = (int) $conn->query("SELECT COUNT(*) AS c FROM users WHERE status = 'pending'")->fetch_assoc()['c'];
 $pending_cashouts_count = (int) $conn->query("SELECT COUNT(*) AS c FROM cashouts WHERE status = 'pending'")->fetch_assoc()['c'];
 
@@ -33,18 +25,11 @@ $nav_groups = [
         '/admin/orders.php'   => ['icon' => 'fa-receipt',         'label' => 'Manage Orders'],
         '/admin/users.php'    => ['icon' => 'fa-users',           'label' => 'Manage Users', 'badge' => $pending_wellness_users],
         '/admin/cashouts.php' => ['icon' => 'fa-money-bill-wave', 'label' => 'Manage Cashouts', 'badge' => $pending_cashouts_count],
-    ],
-    'Basics' => [
-        '/basics/admin/applications.php' => ['icon' => 'fa-file-signature', 'label' => 'Applications', 'badge' => $pending_basics_count],
-        '/basics/admin/members.php'      => ['icon' => 'fa-users',          'label' => 'Members'],
-        '/basics/admin/products.php'     => ['icon' => 'fa-box',            'label' => 'Manage Products'],
-        '/basics/admin/cycles.php'       => ['icon' => 'fa-calendar-week',  'label' => 'Weekly Cycles'],
-        '/basics/admin/orders.php'       => ['icon' => 'fa-receipt',        'label' => 'Manage Orders'],
-        '/basics/admin/payments.php'     => ['icon' => 'fa-money-bill-wave', 'label' => 'Payments'],
-        '/basics/admin/dormancy.php'     => ['icon' => 'fa-user-clock',     'label' => 'Dormancy Report'],
+        '/admin/broadcast.php' => ['icon' => 'fa-comment-sms',    'label' => 'Announcement'],
     ],
     'System' => [
         '/admin/settings.php' => ['icon' => 'fa-gear', 'label' => 'Settings'],
+        '/admin/activity_log.php' => ['icon' => 'fa-clock-rotate-left', 'label' => 'Activity Log'],
     ],
 ];
 ?>
@@ -52,14 +37,14 @@ $nav_groups = [
   <div class="offcanvas offcanvas-start offcanvas-lg admin-sidebar" tabindex="-1" id="adminSidebar">
     <div class="offcanvas-header d-lg-none">
       <div class="brand-logo-box">
-        <img src="<?= BASE_URL ?>/assets/img/wellness/logo.jpg" alt="<?= sanitize(SITE_NAME) ?>" class="brand-logo" style="height:30px;">
+        <img src="<?= BASE_URL ?>/assets/img/wellness/logo.jpg" alt="JMC Foodies Wellness" class="brand-logo" style="height:30px;">
       </div>
       <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" data-bs-target="#adminSidebar" aria-label="Close"></button>
     </div>
     <div class="offcanvas-body admin-sidebar-body">
       <a href="<?= BASE_URL ?>/admin/index.php" class="admin-sidebar-brand d-none d-lg-flex">
         <div class="brand-logo-box">
-          <img src="<?= BASE_URL ?>/assets/img/wellness/logo.jpg" alt="<?= sanitize(SITE_NAME) ?>" class="brand-logo" style="height:34px;">
+          <img src="<?= BASE_URL ?>/assets/img/wellness/logo.jpg" alt="JMC Foodies Wellness" class="brand-logo" style="height:34px;">
         </div>
       </a>
       <nav class="admin-sidebar-nav">
@@ -86,7 +71,7 @@ $nav_groups = [
         <i class="fas fa-bars"></i>
       </button>
       <div class="brand-logo-box">
-        <img src="<?= BASE_URL ?>/assets/img/wellness/logo.jpg" alt="<?= sanitize(SITE_NAME) ?>" class="brand-logo" style="height:28px;">
+        <img src="<?= BASE_URL ?>/assets/img/wellness/logo.jpg" alt="JMC Foodies Wellness" class="brand-logo" style="height:28px;">
       </div>
     </div>
     <div class="admin-content">

@@ -17,16 +17,6 @@ $total_cashed_out = (float) $conn->query("SELECT COALESCE(SUM(amount),0) AS s FR
 $recent_orders = $conn->query("SELECT o.*, u.full_name FROM orders o JOIN users u ON u.id = o.user_id ORDER BY o.created_at DESC LIMIT 5");
 $recent_cashouts = $conn->query("SELECT c.*, u.full_name FROM cashouts c JOIN users u ON u.id = c.user_id ORDER BY c.created_at DESC LIMIT 5");
 
-$pending_basics_applications = $conn->query("SELECT COUNT(*) AS c FROM basics_members WHERE application_status = 'pending'")->fetch_assoc()['c'];
-$active_basics_members = $conn->query("SELECT COUNT(*) AS c FROM basics_members WHERE application_status = 'approved' AND membership_status = 'active'")->fetch_assoc()['c'];
-$basics_orders_awaiting_payment = $conn->query("SELECT COUNT(*) AS c FROM basics_orders o WHERE o.status = 'placed'
-    AND o.total_amount > (SELECT COALESCE(SUM(amount_paid),0) FROM basics_payments p WHERE p.order_id = o.id)")->fetch_assoc()['c'];
-$basics_outstanding_total = (float) $conn->query("SELECT COALESCE(SUM(o.total_amount - IFNULL((SELECT SUM(amount_paid) FROM basics_payments p WHERE p.order_id = o.id), 0)), 0) AS s
-    FROM basics_orders o WHERE o.status = 'placed'")->fetch_assoc()['s'];
-
-$recent_basics_applications = $conn->query("SELECT bm.*, u.full_name, u.username FROM basics_members bm
-    JOIN users u ON u.id = bm.user_id WHERE bm.application_status = 'pending' ORDER BY bm.applied_at DESC LIMIT 5");
-
 $page_title = 'Dashboard';
 require __DIR__ . '/includes/admin_header.php';
 require __DIR__ . '/includes/admin_sidebar.php';
@@ -62,39 +52,6 @@ require __DIR__ . '/includes/admin_sidebar.php';
       <div class="stat-tile"><div class="stat-num accent" style="font-size:1.3rem;"><?= format_price($total_cashed_out) ?></div><div class="stat-lbl">Cashed Out</div></div>
     </div>
   </div>
-
-  <h2 class="h6 mb-3 text-muted text-uppercase small" style="letter-spacing:1px;">JMC Foodies Basics</h2>
-  <div class="row g-3 mb-4">
-    <div class="col-6 col-md-3">
-      <div class="stat-tile"><div class="stat-num<?= $pending_basics_applications > 0 ? ' accent' : '' ?>"><?= (int) $pending_basics_applications ?></div><div class="stat-lbl">Pending Applications</div></div>
-    </div>
-    <div class="col-6 col-md-3">
-      <div class="stat-tile"><div class="stat-num"><?= (int) $active_basics_members ?></div><div class="stat-lbl">Active Members</div></div>
-    </div>
-    <div class="col-6 col-md-3">
-      <div class="stat-tile"><div class="stat-num"><?= (int) $basics_orders_awaiting_payment ?></div><div class="stat-lbl">Orders Awaiting Payment</div></div>
-    </div>
-    <div class="col-6 col-md-3">
-      <div class="stat-tile"><div class="stat-num accent" style="font-size:1.3rem;"><?= format_price($basics_outstanding_total) ?></div><div class="stat-lbl">Outstanding Balance</div></div>
-    </div>
-  </div>
-  <?php if ($recent_basics_applications->num_rows > 0): ?>
-    <div class="table-responsive mb-4">
-      <table class="table-theme">
-        <thead><tr><th>Applicant</th><th>Employer</th><th>Applied</th><th></th></tr></thead>
-        <tbody>
-        <?php while ($ba = $recent_basics_applications->fetch_assoc()): ?>
-          <tr>
-            <td><?= sanitize($ba['full_name']) ?> <span class="text-muted small">(<?= sanitize($ba['username']) ?>)</span></td>
-            <td><?= sanitize($ba['employer_name']) ?></td>
-            <td><?= date('M j, Y', strtotime($ba['applied_at'])) ?></td>
-            <td><a href="<?= BASE_URL ?>/basics/admin/application_view.php?id=<?= (int) $ba['id'] ?>" class="btn-chip btn-chip-outline">Review</a></td>
-          </tr>
-        <?php endwhile; ?>
-        </tbody>
-      </table>
-    </div>
-  <?php endif; ?>
 
   <div class="row g-4">
     <div class="col-12 col-lg-6">

@@ -5,13 +5,13 @@ require __DIR__ . '/../../includes/functions.php';
 require __DIR__ . '/../../includes/auth.php';
 require __DIR__ . '/../includes/functions.php';
 
-require_admin_login();
+require_basics_admin_login();
 
 $id = (int) ($_GET['id'] ?? 0);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
-    $admin_id = current_admin_id();
+    $admin_id = basics_current_admin_id();
 
     if ($action === 'approve') {
         $weekly_limit = round((float) ($_POST['weekly_credit_limit'] ?? 0), 2);
@@ -21,20 +21,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                  WHERE id = ? AND application_status = 'pending'");
         $stmt->bind_param('ddii', $weekly_limit, $emergency_limit, $admin_id, $id);
         $stmt->execute();
+        $approved = $stmt->affected_rows > 0;
         $stmt->close();
+
+        if ($approved) {
+            log_activity($conn, 'approve_basics_application', 'Approved Basics application for member #' . $id . ' (weekly limit ' . format_price($weekly_limit) . ')');
+            $member = basics_get_member($conn, $conn->query("SELECT user_id FROM basics_members WHERE id = $id")->fetch_assoc()['user_id']);
+            if ($member) {
+                basics_notify($conn, $member, "Hi {$member['full_name']}, your JMC Foodies Basics membership has been APPROVED! Weekly credit limit: " . format_price($weekly_limit) . ". You can now log in and start ordering. - JMC Foodies Basics");
+            }
+        }
     } elseif ($action === 'deny') {
         $notes = trim($_POST['admin_notes'] ?? '');
         $stmt = $conn->prepare("UPDATE basics_members SET application_status = 'denied', admin_notes = ?, reviewed_by = ?, reviewed_at = NOW()
                                  WHERE id = ? AND application_status = 'pending'");
         $stmt->bind_param('sii', $notes, $admin_id, $id);
         $stmt->execute();
+        $denied = $stmt->affected_rows > 0;
         $stmt->close();
+
+        if ($denied) {
+            log_activity($conn, 'deny_basics_application', 'Denied Basics application for member #' . $id);
+        }
     }
     redirect('/basics/admin/application_view.php?id=' . $id);
 }
 
 $stmt = $conn->prepare("SELECT bm.*, u.full_name, u.username, u.email, u.contact_number, u.address, u.birthdate
-                         FROM basics_members bm JOIN users u ON u.id = bm.user_id WHERE bm.id = ?");
+                         FROM basics_members bm JOIN basics_users u ON u.id = bm.user_id WHERE bm.id = ?");
 $stmt->bind_param('i', $id);
 $stmt->execute();
 $application = $stmt->get_result()->fetch_assoc();
@@ -53,13 +67,14 @@ $doc_labels = [
     'valid_id_1' => 'Valid ID #1',
     'valid_id_2' => 'Valid ID #2',
     'barangay_clearance' => 'Barangay Clearance',
-    'membership_application_form' => 'Membership Application Form',
+    'membership_application_form' => 'Membership Application Form (signed) - Front Page',
+    'membership_application_form_back' => 'Membership Application Form (signed) - Back Page',
     'certificate_of_employment' => 'Certificate of Employment / Work Clearance',
 ];
 
 $page_title = 'Review Application';
 require __DIR__ . '/../../admin/includes/admin_header.php';
-require __DIR__ . '/../../admin/includes/admin_sidebar.php';
+require __DIR__ . '/includes/admin_sidebar.php';
 ?>
 <div class="inner-hero" style="padding:36px 0;">
   <div class="container">

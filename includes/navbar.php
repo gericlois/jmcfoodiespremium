@@ -10,6 +10,12 @@ $module_home_url = $module_home_url ?? BASE_URL . '/index.php';
 $module_nav_items = $module_nav_items ?? [];
 $module_guest_nav_items = $module_guest_nav_items ?? [];
 $module_register_url = $module_register_url ?? null;
+// Wellness and Basics have fully separate login sessions — this navbar is
+// shared markup for both, so it checks whichever one applies to the current
+// page instead of a single global is_logged_in().
+$module_is_logged_in = $module_name === 'JMC Foodies Basics' ? basics_is_logged_in() : is_logged_in();
+$module_login_url = $module_name === 'JMC Foodies Basics' ? BASICS_URL . '/login.php' : BASE_URL . '/login.php';
+$module_logout_url = $module_name === 'JMC Foodies Basics' ? BASICS_URL . '/logout.php' : BASE_URL . '/logout.php';
 ?>
 <div id="topbar">
   <div class="container">
@@ -36,7 +42,7 @@ $module_register_url = $module_register_url ?? null;
     </button>
     <div class="collapse navbar-collapse" id="navmenu">
       <ul class="navbar-nav ms-auto">
-        <?php if (is_logged_in()): ?>
+        <?php if ($module_is_logged_in): ?>
           <?php foreach ($module_nav_items as $label => $url): ?>
             <li class="nav-item"><a class="nav-link" href="<?= sanitize($url) ?>"><?= sanitize($label) ?></a></li>
           <?php endforeach; ?>
@@ -47,10 +53,13 @@ $module_register_url = $module_register_url ?? null;
         <?php endif; ?>
       </ul>
       <div class="d-flex align-items-center gap-2 ms-3">
-        <?php if (is_logged_in()): ?>
-          <a href="<?= BASE_URL ?>/logout.php" class="nav-link nav-cta"><i class="fas fa-right-from-bracket me-1"></i>Logout</a>
+        <?php if ($module_is_logged_in): ?>
+          <?php if ($module_name === 'JMC Foodies Basics'): ?>
+            <a href="<?= BASICS_URL ?>/cart.php" class="nav-link nav-cta"><i class="fas fa-cart-shopping me-1"></i>Cart</a>
+          <?php endif; ?>
+          <a href="<?= $module_logout_url ?>" class="nav-link nav-cta"><i class="fas fa-right-from-bracket me-1"></i>Logout</a>
         <?php else: ?>
-          <a href="<?= BASE_URL ?>/login.php" class="nav-link">Login</a>
+          <a href="<?= $module_login_url ?>" class="nav-link">Login</a>
           <?php if ($module_register_url): ?>
             <a href="<?= sanitize($module_register_url) ?>" class="nav-link nav-cta"><i class="fas fa-user-plus me-1"></i>Register</a>
           <?php endif; ?>

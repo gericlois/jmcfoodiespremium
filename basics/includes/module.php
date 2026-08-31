@@ -21,10 +21,12 @@ $module_header_dark = true;
 $module_squared_ui = true;
 
 $module_nav_items = [
-    'Dashboard'  => BASICS_URL . '/dashboard.php',
-    'Catalog'    => BASICS_URL . '/catalog.php',
-    'My Orders'  => BASICS_URL . '/orders.php',
-    'Payments'   => BASICS_URL . '/payments.php',
+    'Dashboard'         => BASICS_URL . '/dashboard.php',
+    'Catalog'           => BASICS_URL . '/catalog.php',
+    'My Orders'         => BASICS_URL . '/orders.php',
+    'Payments'          => BASICS_URL . '/payments.php',
+    'Emergency Credit'  => BASICS_URL . '/emergency_credit.php',
+    'Benefits'          => BASICS_URL . '/benefits.php',
 ];
 $module_guest_nav_items = [
     'Home' => BASICS_URL . '/index.php',

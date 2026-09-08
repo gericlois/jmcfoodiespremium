@@ -39,7 +39,7 @@ require __DIR__ . '/includes/admin_header.php';
       <div class="col-12 col-sm-8 col-md-5 col-lg-4">
         <div class="text-center mb-4">
           <div class="hbi mx-auto mb-3" style="width:56px;height:56px;font-size:1.4rem;"><i class="fas fa-gift"></i></div>
-          <h1 class="h4" style="color:#fff;font-family:'Playfair Display',serif;font-weight:900;"><?= APP_NAME ?></h1>
+          <h1 class="h4" style="color:#fff;font-family:'Playfair Display',serif;font-weight:900;"><?= sanitize(SITE_NAME) ?></h1>
           <p class="small" style="color:rgba(255,255,255,.5);">Admin Panel</p>
         </div>
 

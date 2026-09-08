@@ -9,7 +9,7 @@ require_admin_login();
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delete') {
     $id = (int) $_POST['id'];
 
-    $stmt = $conn->prepare("SELECT image FROM products WHERE id = ?");
+    $stmt = $conn->prepare("SELECT name, image FROM products WHERE id = ?");
     $stmt->bind_param('i', $id);
     $stmt->execute();
     $product = $stmt->get_result()->fetch_assoc();
@@ -27,6 +27,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delet
         $stmt->bind_param('i', $id);
         $stmt->execute();
         $stmt->close();
+
+        log_activity($conn, 'delete_product', 'Deleted Wellness product "' . ($product['name'] ?? "#$id") . '"');
 
         if ($product && $product['image'] && is_file(UPLOAD_PATH . 'products/' . $product['image'])) {
             unlink(UPLOAD_PATH . 'products/' . $product['image']);
@@ -57,13 +59,13 @@ require __DIR__ . '/includes/admin_sidebar.php';
 
 <div class="container-fluid py-4">
   <div class="d-flex justify-content-between align-items-center mb-4">
-    <span></span>
+    <button type="button" class="btn-outline-theme no-print" onclick="window.print()"><i class="fas fa-print"></i>Print</button>
     <a href="<?= BASE_URL ?>/admin/product_edit.php" class="btn-red"><i class="fas fa-plus"></i>Add Product</a>
   </div>
 
   <div class="table-responsive">
     <table class="table-theme">
-      <thead><tr><th>Photo</th><th>Name</th><th>SRP</th><th>Status</th><th>Created</th><th></th></tr></thead>
+      <thead><tr><th>Photo</th><th>Name</th><th>SRP</th><th>Status</th><th>Created</th><th class="no-print"></th></tr></thead>
       <tbody>
       <?php if ($products->num_rows === 0): ?>
         <tr><td colspan="6" class="text-muted">No products yet.</td></tr>
@@ -81,7 +83,7 @@ require __DIR__ . '/includes/admin_sidebar.php';
           <td><?= format_price($p['srp']) ?></td>
           <td><span class="pill pill-<?= $p['status'] === 'active' ? 'completed' : 'cancelled' ?>"><?= sanitize($p['status']) ?></span></td>
           <td><?= date('M j, Y', strtotime($p['created_at'])) ?></td>
-          <td>
+          <td class="no-print">
             <a href="<?= BASE_URL ?>/admin/product_edit.php?id=<?= (int) $p['id'] ?>" class="btn-chip btn-chip-outline">Edit</a>
             <form method="post" class="d-inline">
               <input type="hidden" name="action" value="delete">

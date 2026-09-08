@@ -1,42 +1,68 @@
+<?php
+// Module-data-driven: each page sets $module_name/$module_logo_url/
+// $module_home_url/$module_nav_items/$module_guest_nav_items/$module_register_url
+// before requiring this (see wellness/includes/module.php,
+// basics/includes/module.php) — unset on neutral pages (hub, login), which
+// fall back to the JMC Digital umbrella defaults below.
+$module_name = $module_name ?? SITE_NAME;
+$module_logo_url = $module_logo_url ?? BASE_URL . '/assets/img/wellness/logo.jpg';
+$module_home_url = $module_home_url ?? BASE_URL . '/index.php';
+$module_nav_items = $module_nav_items ?? [];
+$module_guest_nav_items = $module_guest_nav_items ?? [];
+$module_register_url = $module_register_url ?? null;
+// Wellness and Basics have fully separate login sessions — this navbar is
+// shared markup for both, so it checks whichever one applies to the current
+// page instead of a single global is_logged_in().
+$module_is_logged_in = $module_name === 'JMC Foodies Basics' ? basics_is_logged_in() : is_logged_in();
+$module_login_url = $module_name === 'JMC Foodies Basics' ? BASICS_URL . '/login.php' : BASE_URL . '/login.php';
+$module_logout_url = $module_name === 'JMC Foodies Basics' ? BASICS_URL . '/logout.php' : BASE_URL . '/logout.php';
+?>
 <div id="topbar">
   <div class="container">
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
       <div class="top-contact d-flex flex-wrap">
         <span><i class="fas fa-envelope"></i><?= sanitize(setting($conn, 'company_email', 'support@example.com')) ?></span>
       </div>
-      <div class="d-flex align-items-center gap-3">
-        <span class="ttag"><i class="fas fa-percent me-1"></i><?= (int) ((float) setting($conn, 'personal_rebate_rate', 0.20) * 100) ?>% Personal Rebate</span>
-      </div>
+      <?php if ($module_name === 'JMC Foodies Wellness'): ?>
+        <div class="d-flex align-items-center gap-3">
+          <span class="ttag"><i class="fas fa-percent me-1"></i><?= (int) ((float) setting($conn, 'personal_rebate_rate', 0.20) * 100) ?>% Personal Rebate</span>
+        </div>
+      <?php endif; ?>
     </div>
   </div>
 </div>
 
 <nav class="navbar navbar-expand-lg" id="nav">
   <div class="container">
-    <a class="navbar-brand" href="<?= BASE_URL ?>/index.php">
-      <img src="<?= BASE_URL ?>/assets/img/logo.jpg" alt="<?= sanitize(APP_NAME) ?>" class="brand-logo">
+    <a class="navbar-brand" href="<?= sanitize($module_home_url) ?>">
+      <img src="<?= sanitize($module_logo_url) ?>" alt="<?= sanitize($module_name) ?>" class="brand-logo">
     </a>
     <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navmenu">
       <i class="fas fa-bars" style="color:var(--primary);font-size:1.35rem;"></i>
     </button>
     <div class="collapse navbar-collapse" id="navmenu">
       <ul class="navbar-nav ms-auto">
-        <?php if (is_logged_in()): ?>
-          <li class="nav-item"><a class="nav-link" href="<?= BASE_URL ?>/dashboard.php">Dashboard</a></li>
-          <li class="nav-item"><a class="nav-link" href="<?= BASE_URL ?>/menu.php">Shop</a></li>
-          <li class="nav-item"><a class="nav-link" href="<?= BASE_URL ?>/orders.php">My Orders</a></li>
-          <li class="nav-item"><a class="nav-link" href="<?= BASE_URL ?>/wallet.php"><?= sanitize(WALLET_NAME) ?></a></li>
+        <?php if ($module_is_logged_in): ?>
+          <?php foreach ($module_nav_items as $label => $url): ?>
+            <li class="nav-item"><a class="nav-link" href="<?= sanitize($url) ?>"><?= sanitize($label) ?></a></li>
+          <?php endforeach; ?>
         <?php else: ?>
-          <li class="nav-item"><a class="nav-link" href="<?= BASE_URL ?>/index.php">Home</a></li>
-          <li class="nav-item"><a class="nav-link" href="<?= BASE_URL ?>/menu.php">Shop</a></li>
+          <?php foreach ($module_guest_nav_items as $label => $url): ?>
+            <li class="nav-item"><a class="nav-link" href="<?= sanitize($url) ?>"><?= sanitize($label) ?></a></li>
+          <?php endforeach; ?>
         <?php endif; ?>
       </ul>
       <div class="d-flex align-items-center gap-2 ms-3">
-        <?php if (is_logged_in()): ?>
-          <a href="<?= BASE_URL ?>/logout.php" class="nav-link nav-cta"><i class="fas fa-right-from-bracket me-1"></i>Logout</a>
+        <?php if ($module_is_logged_in): ?>
+          <?php if ($module_name === 'JMC Foodies Basics'): ?>
+            <a href="<?= BASICS_URL ?>/cart.php" class="nav-link nav-cta"><i class="fas fa-cart-shopping me-1"></i>Cart</a>
+          <?php endif; ?>
+          <a href="<?= $module_logout_url ?>" class="nav-link nav-cta"><i class="fas fa-right-from-bracket me-1"></i>Logout</a>
         <?php else: ?>
-          <a href="<?= BASE_URL ?>/login.php" class="nav-link">Login</a>
-          <a href="<?= BASE_URL ?>/register.php" class="nav-link nav-cta"><i class="fas fa-user-plus me-1"></i>Register</a>
+          <a href="<?= $module_login_url ?>" class="nav-link">Login</a>
+          <?php if ($module_register_url): ?>
+            <a href="<?= sanitize($module_register_url) ?>" class="nav-link nav-cta"><i class="fas fa-user-plus me-1"></i>Register</a>
+          <?php endif; ?>
         <?php endif; ?>
       </div>
     </div>

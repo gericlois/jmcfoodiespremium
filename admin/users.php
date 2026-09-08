@@ -29,9 +29,13 @@ require __DIR__ . '/includes/admin_sidebar.php';
 </div>
 
 <div class="container-fluid py-4">
+  <div class="d-flex justify-content-end mb-3">
+    <button type="button" class="btn-outline-theme no-print" onclick="window.print()"><i class="fas fa-print"></i>Print</button>
+  </div>
+
   <div class="table-responsive">
     <table class="table-theme">
-      <thead><tr><th>Name</th><th>Username</th><th>Referral Code</th><th>Referred By</th><th>Referrals</th><th><?= sanitize(WALLET_NAME) ?> Balance</th><th>Status</th><th>Joined</th><th></th></tr></thead>
+      <thead><tr><th>Name</th><th>Username</th><th>Referral Code</th><th>Referred By</th><th>Referrals</th><th>JMC Wallet Balance</th><th>Status</th><th>Joined</th><th class="no-print"></th></tr></thead>
       <tbody>
       <?php if ($users->num_rows === 0): ?>
         <tr><td colspan="9" class="text-muted">No users yet.</td></tr>
@@ -46,7 +50,7 @@ require __DIR__ . '/includes/admin_sidebar.php';
           <td><?= format_price(wallet_balance($conn, $u['id'])) ?></td>
           <td><span class="pill pill-<?= $u['status'] ?>"><?= sanitize($u['status']) ?></span></td>
           <td><?= date('M j, Y', strtotime($u['created_at'])) ?></td>
-          <td>
+          <td class="no-print">
             <a href="<?= BASE_URL ?>/admin/user_view.php?id=<?= (int) $u['id'] ?>" class="btn-chip btn-chip-outline">View</a>
             <?php if ($u['status'] === 'pending'): ?>
               <form method="post" class="d-inline">

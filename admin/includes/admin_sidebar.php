@@ -1,43 +1,61 @@
 <?php
 $admin_shell_open = true;
 
-$current = basename($_SERVER['SCRIPT_NAME']);
+$current_path = BASE_URL !== '' && strpos($_SERVER['REQUEST_URI'], BASE_URL) === 0
+    ? substr(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), strlen(BASE_URL))
+    : parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+
 // Detail/edit sub-pages highlight their parent list page in the sidebar.
 $sub_to_parent = [
-    'order_view.php'   => 'orders.php',
-    'user_view.php'    => 'users.php',
-    'product_edit.php' => 'products.php',
+    '/admin/order_view.php'   => '/admin/orders.php',
+    '/admin/user_view.php'    => '/admin/users.php',
+    '/admin/product_edit.php' => '/admin/products.php',
 ];
-$current = $sub_to_parent[$current] ?? $current;
+$current_path = $sub_to_parent[$current_path] ?? $current_path;
 
-$nav_items = [
-    'index.php'     => ['icon' => 'fa-gauge-high',     'label' => 'Dashboard'],
-    'products.php'  => ['icon' => 'fa-box',             'label' => 'Manage Products'],
-    'orders.php'    => ['icon' => 'fa-receipt',         'label' => 'Manage Orders'],
-    'users.php'     => ['icon' => 'fa-users',           'label' => 'Manage Users'],
-    'cashouts.php'  => ['icon' => 'fa-money-bill-wave', 'label' => 'Manage Cashouts'],
-    'settings.php'  => ['icon' => 'fa-gear',            'label' => 'Settings'],
+$pending_wellness_users = (int) $conn->query("SELECT COUNT(*) AS c FROM users WHERE status = 'pending'")->fetch_assoc()['c'];
+$pending_cashouts_count = (int) $conn->query("SELECT COUNT(*) AS c FROM cashouts WHERE status = 'pending'")->fetch_assoc()['c'];
+
+$nav_groups = [
+    'Overview' => [
+        '/admin/index.php' => ['icon' => 'fa-gauge-high', 'label' => 'Dashboard'],
+    ],
+    'Wellness' => [
+        '/admin/products.php' => ['icon' => 'fa-box',             'label' => 'Manage Products'],
+        '/admin/orders.php'   => ['icon' => 'fa-receipt',         'label' => 'Manage Orders'],
+        '/admin/users.php'    => ['icon' => 'fa-users',           'label' => 'Manage Users', 'badge' => $pending_wellness_users],
+        '/admin/cashouts.php' => ['icon' => 'fa-money-bill-wave', 'label' => 'Manage Cashouts', 'badge' => $pending_cashouts_count],
+        '/admin/broadcast.php' => ['icon' => 'fa-comment-sms',    'label' => 'Announcement'],
+    ],
+    'System' => [
+        '/admin/settings.php' => ['icon' => 'fa-gear', 'label' => 'Settings'],
+        '/admin/activity_log.php' => ['icon' => 'fa-clock-rotate-left', 'label' => 'Activity Log'],
+    ],
 ];
 ?>
 <div class="admin-shell">
   <div class="offcanvas offcanvas-start offcanvas-lg admin-sidebar" tabindex="-1" id="adminSidebar">
     <div class="offcanvas-header d-lg-none">
       <div class="brand-logo-box">
-        <img src="<?= BASE_URL ?>/assets/img/logo.jpg" alt="<?= sanitize(APP_NAME) ?>" class="brand-logo" style="height:30px;">
+        <img src="<?= BASE_URL ?>/assets/img/wellness/logo.jpg" alt="JMC Foodies Wellness" class="brand-logo" style="height:30px;">
       </div>
       <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" data-bs-target="#adminSidebar" aria-label="Close"></button>
     </div>
     <div class="offcanvas-body admin-sidebar-body">
       <a href="<?= BASE_URL ?>/admin/index.php" class="admin-sidebar-brand d-none d-lg-flex">
         <div class="brand-logo-box">
-          <img src="<?= BASE_URL ?>/assets/img/logo.jpg" alt="<?= sanitize(APP_NAME) ?>" class="brand-logo" style="height:34px;">
+          <img src="<?= BASE_URL ?>/assets/img/wellness/logo.jpg" alt="JMC Foodies Wellness" class="brand-logo" style="height:34px;">
         </div>
       </a>
       <nav class="admin-sidebar-nav">
-        <?php foreach ($nav_items as $file => $item): ?>
-          <a class="admin-nav-link <?= $current === $file ? 'active' : '' ?>" href="<?= BASE_URL ?>/admin/<?= $file ?>">
-            <i class="fas <?= $item['icon'] ?>"></i> <?= $item['label'] ?>
-          </a>
+        <?php foreach ($nav_groups as $group_label => $group_items): ?>
+          <div class="admin-nav-group-label"><?= sanitize($group_label) ?></div>
+          <?php foreach ($group_items as $path => $item): ?>
+            <a class="admin-nav-link <?= $current_path === $path ? 'active' : '' ?>" href="<?= BASE_URL . $path ?>">
+              <i class="fas <?= $item['icon'] ?>"></i> <?= $item['label'] ?>
+              <?php if (!empty($item['badge'])): ?><span class="admin-nav-badge"><?= (int) $item['badge'] ?></span><?php endif; ?>
+            </a>
+          <?php endforeach; ?>
         <?php endforeach; ?>
       </nav>
       <div class="admin-sidebar-bottom">
@@ -53,7 +71,7 @@ $nav_items = [
         <i class="fas fa-bars"></i>
       </button>
       <div class="brand-logo-box">
-        <img src="<?= BASE_URL ?>/assets/img/logo.jpg" alt="<?= sanitize(APP_NAME) ?>" class="brand-logo" style="height:28px;">
+        <img src="<?= BASE_URL ?>/assets/img/wellness/logo.jpg" alt="JMC Foodies Wellness" class="brand-logo" style="height:28px;">
       </div>
     </div>
     <div class="admin-content">

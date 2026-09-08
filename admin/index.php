@@ -67,7 +67,7 @@ require __DIR__ . '/includes/admin_sidebar.php';
             <tr>
               <td><?= sanitize($o['full_name']) ?></td>
               <td><?= format_price($o['total_amount']) ?></td>
-              <td class="text-capitalize"><?= sanitize($o['payment_method']) ?></td>
+              <td><?= sanitize(payment_method_label($o['payment_method'])) ?></td>
               <td><span class="pill pill-<?= $o['status'] ?>"><?= sanitize($o['status']) ?></span></td>
               <td><a href="<?= BASE_URL ?>/admin/order_view.php?id=<?= (int) $o['id'] ?>" class="btn-chip btn-chip-outline">View</a></td>
             </tr>

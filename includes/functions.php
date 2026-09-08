@@ -1,6 +1,135 @@
 <?php
+require_once __DIR__ . '/../config/sms.php';
+require_once __DIR__ . '/../config/email.php';
+
 function format_price($amount) {
     return '₱' . number_format((float) $amount, 2);
+}
+
+// ---------------------------------------------------------------
+// SMS notifications (Semaphore, semaphore.co). Used by both Wellness and
+// Basics for every member-facing SMS trigger. Fails silently (returns false,
+// logs nothing to the user-facing page) rather than blocking whatever action
+// it's attached to — a failed/unsent SMS should never stop an application
+// approval, a payment being recorded, etc. Skips entirely (no API call) if
+// SEMAPHORE_API_KEY isn't configured yet, so the app works before SMS setup.
+// ---------------------------------------------------------------
+function send_sms($to, $message) {
+    if (SEMAPHORE_API_KEY === '' || trim((string) $to) === '') {
+        return false;
+    }
+
+    $params = [
+        'apikey' => SEMAPHORE_API_KEY,
+        'number' => $to,
+        'message' => $message,
+    ];
+    if (SEMAPHORE_SENDER_NAME !== '') {
+        $params['sendername'] = SEMAPHORE_SENDER_NAME;
+    }
+
+    $ch = curl_init('https://api.semaphore.co/api/v4/messages');
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($params));
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    $response = curl_exec($ch);
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    return $response !== false && $http_code >= 200 && $http_code < 300;
+}
+
+// ---------------------------------------------------------------
+// Email notifications, sent over Gmail SMTP (smtp.gmail.com:465, implicit
+// TLS) via raw sockets — no PHPMailer/Composer in this codebase, so this
+// mirrors send_sms()'s style (a plain PHP function wrapping the provider's
+// wire protocol directly). Uses a Gmail App Password, not the account's
+// real login password (see config/email.example.php for setup).
+// Fails silently (returns false, logs nothing to the user-facing page)
+// rather than blocking whatever action it's attached to, same contract as
+// send_sms(). Skips entirely if GMAIL_SMTP_USERNAME isn't configured yet.
+// ---------------------------------------------------------------
+function smtp_read_response($socket) {
+    $data = '';
+    while (($line = fgets($socket, 515)) !== false) {
+        $data .= $line;
+        // A response is done once a line has the code followed by a space
+        // (not a dash) — a dash means more lines of this same response follow.
+        if (isset($line[3]) && $line[3] === ' ') {
+            break;
+        }
+    }
+    return $data;
+}
+
+function send_email($to, $subject, $body) {
+    if (GMAIL_SMTP_USERNAME === '' || trim((string) $to) === '') {
+        return false;
+    }
+
+    // Appended to every notification email sent through this function, so
+    // callers don't each need to remember to add it.
+    $body .= "\r\n\r\nFor questions and concerns please call +63 917 323 8153.";
+
+    $socket = @stream_socket_client('ssl://smtp.gmail.com:465', $errno, $errstr, 10);
+    if (!$socket) {
+        return false;
+    }
+    stream_set_timeout($socket, 10);
+
+    smtp_read_response($socket); // 220 greeting
+
+    fwrite($socket, "EHLO localhost\r\n");
+    smtp_read_response($socket);
+
+    fwrite($socket, "AUTH LOGIN\r\n");
+    smtp_read_response($socket);
+    fwrite($socket, base64_encode(GMAIL_SMTP_USERNAME) . "\r\n");
+    smtp_read_response($socket);
+    fwrite($socket, base64_encode(GMAIL_SMTP_PASSWORD) . "\r\n");
+    $auth_response = smtp_read_response($socket);
+    if (substr($auth_response, 0, 3) !== '235') {
+        fclose($socket);
+        return false;
+    }
+
+    fwrite($socket, 'MAIL FROM:<' . GMAIL_SMTP_USERNAME . ">\r\n");
+    smtp_read_response($socket);
+    fwrite($socket, 'RCPT TO:<' . $to . ">\r\n");
+    $rcpt_response = smtp_read_response($socket);
+    if (substr($rcpt_response, 0, 3) !== '250') {
+        fclose($socket);
+        return false;
+    }
+
+    fwrite($socket, "DATA\r\n");
+    smtp_read_response($socket);
+
+    $headers = 'From: ' . GMAIL_SMTP_FROM_NAME . ' <' . GMAIL_SMTP_USERNAME . ">\r\n"
+        . 'To: <' . $to . ">\r\n"
+        . 'Subject: ' . $subject . "\r\n"
+        . "MIME-Version: 1.0\r\n"
+        . "Content-Type: text/plain; charset=UTF-8\r\n";
+    // Per RFC 5321, a lone "." on a line marks end-of-data — escape any line
+    // in the body that starts with one so it isn't mistaken for the terminator.
+    $escaped_body = preg_replace('/^\./m', '..', $body);
+    fwrite($socket, $headers . "\r\n" . $escaped_body . "\r\n.\r\n");
+    $data_response = smtp_read_response($socket);
+
+    fwrite($socket, "QUIT\r\n");
+    fclose($socket);
+
+    return substr($data_response, 0, 3) === '250';
+}
+
+function payment_method_label($method) {
+    $labels = [
+        'wallet' => 'JMC Wallet',
+        'bank_transfer' => 'Bank Transfer - Eastwest QR',
+        'cod' => 'Cash on Pick-up / Delivery',
+    ];
+    return $labels[$method] ?? $method;
 }
 
 function sanitize($value) {
@@ -30,12 +159,57 @@ function setting($conn, $key, $default = null) {
     return $cache[$key] ?? $default;
 }
 
+function save_setting($conn, $key, $value) {
+    $stmt = $conn->prepare("INSERT INTO settings (setting_key, setting_value) VALUES (?, ?)
+                             ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+    $stmt->bind_param('ss', $key, $value);
+    $stmt->execute();
+    $stmt->close();
+}
+
+// ---------------------------------------------------------------
+// Admin action audit trail (admin/activity_log.php). Called from both the
+// Wellness and Basics admin panels at every meaningful mutation. Fails
+// silently on session/DB issues rather than blocking the action it's
+// logging — the log is a record, not a gate.
+// ---------------------------------------------------------------
+function log_activity($conn, $action, $description) {
+    // Wellness and Basics admins are two separate sessions/tables — check
+    // whichever one is actually active for this request.
+    $admin_id = null;
+    $admin_type = null;
+    $table = null;
+    if (function_exists('is_admin_logged_in') && is_admin_logged_in()) {
+        $admin_id = current_admin_id();
+        $admin_type = 'wellness';
+        $table = 'admins';
+    } elseif (function_exists('basics_is_admin_logged_in') && basics_is_admin_logged_in()) {
+        $admin_id = basics_current_admin_id();
+        $admin_type = 'basics';
+        $table = 'basics_admins';
+    }
+
+    $admin_name = null;
+    if ($admin_id) {
+        $stmt = $conn->prepare("SELECT name FROM $table WHERE id = ?");
+        $stmt->bind_param('i', $admin_id);
+        $stmt->execute();
+        $admin_name = $stmt->get_result()->fetch_assoc()['name'] ?? null;
+        $stmt->close();
+    }
+    $ip = $_SERVER['REMOTE_ADDR'] ?? null;
+    $stmt = $conn->prepare("INSERT INTO activity_log (admin_id, admin_type, admin_name, action, description, ip_address) VALUES (?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param('isssss', $admin_id, $admin_type, $admin_name, $action, $description, $ip);
+    $stmt->execute();
+    $stmt->close();
+}
+
 // ---------------------------------------------------------------
 // Validates and saves an uploaded image to uploads/products/, deleting the
 // old file if one is replaced. Returns [filename_to_store, error_or_null].
 // $existing_filename is returned unchanged if no new file was uploaded.
 // ---------------------------------------------------------------
-function handle_product_image_upload($file_key, $existing_filename) {
+function handle_product_image_upload($file_key, $existing_filename, $subfolder = 'products') {
     if (empty($_FILES[$file_key]['name'])) {
         return [$existing_filename, null];
     }
@@ -48,45 +222,140 @@ function handle_product_image_upload($file_key, $existing_filename) {
     if ($_FILES[$file_key]['error'] !== UPLOAD_ERR_OK) {
         return [$existing_filename, 'Image upload failed.'];
     }
-    if ($_FILES[$file_key]['size'] > 2 * 1024 * 1024) {
-        return [$existing_filename, 'Image must be smaller than 2MB.'];
+    if ($_FILES[$file_key]['size'] > 5 * 1024 * 1024) {
+        return [$existing_filename, 'Image must be smaller than 5MB.'];
     }
     if (!isset($allowed_types[$mime])) {
         return [$existing_filename, 'Image must be a JPG, PNG, or WEBP file.'];
     }
 
     $new_filename = bin2hex(random_bytes(8)) . '.' . $allowed_types[$mime];
-    $dest = UPLOAD_PATH . 'products/' . $new_filename;
+    $dest = UPLOAD_PATH . $subfolder . '/' . $new_filename;
     if (!move_uploaded_file($_FILES[$file_key]['tmp_name'], $dest)) {
         return [$existing_filename, 'Failed to save uploaded image.'];
     }
 
-    if ($existing_filename && is_file(UPLOAD_PATH . 'products/' . $existing_filename)) {
-        unlink(UPLOAD_PATH . 'products/' . $existing_filename);
+    if ($existing_filename && is_file(UPLOAD_PATH . $subfolder . '/' . $existing_filename)) {
+        unlink(UPLOAD_PATH . $subfolder . '/' . $existing_filename);
     }
     return [$new_filename, null];
 }
 
 // ---------------------------------------------------------------
+// Downscales an uploaded photo in place if it's larger than $max_dimension
+// on its longest side. Phone-camera photos (KYC IDs, payment proof
+// screenshots) are routinely 3000px+ and several MB despite passing the
+// upload size cap, which makes them slow to load when an admin views one —
+// this brings them down to a web-viewable size while staying legible.
+// No-op (fails silently, keeps the original file) if GD isn't available or
+// the mime type isn't a resizable image (e.g. PDF) — a missing GD extension
+// should never block an upload that already succeeded.
+// ---------------------------------------------------------------
+function resize_image_if_needed($path, $mime, $max_dimension = 1600, $quality = 82) {
+    $creators = [
+        'image/jpeg' => 'imagecreatefromjpeg',
+        'image/png' => 'imagecreatefrompng',
+        'image/webp' => 'imagecreatefromwebp',
+    ];
+    if (!isset($creators[$mime]) || !function_exists($creators[$mime]) || !function_exists('imagecreatetruecolor')) {
+        return;
+    }
+
+    $size = @getimagesize($path);
+    if (!$size || max($size[0], $size[1]) <= $max_dimension) {
+        return;
+    }
+
+    $src = @$creators[$mime]($path);
+    if (!$src) {
+        return;
+    }
+
+    $ratio = $max_dimension / max($size[0], $size[1]);
+    $new_width = max(1, (int) round($size[0] * $ratio));
+    $new_height = max(1, (int) round($size[1] * $ratio));
+
+    $dst = imagecreatetruecolor($new_width, $new_height);
+    if ($mime === 'image/png') {
+        imagealphablending($dst, false);
+        imagesavealpha($dst, true);
+    }
+    imagecopyresampled($dst, $src, 0, 0, 0, 0, $new_width, $new_height, $size[0], $size[1]);
+
+    if ($mime === 'image/jpeg') {
+        imagejpeg($dst, $path, $quality);
+    } elseif ($mime === 'image/png') {
+        imagepng($dst, $path, 6);
+    } elseif ($mime === 'image/webp') {
+        imagewebp($dst, $path, $quality);
+    }
+
+    imagedestroy($src);
+    imagedestroy($dst);
+}
+
+// ---------------------------------------------------------------
+// Sets far-future browser caching for a protected attachment served through
+// a PHP viewer script (kyc_view.php, payment_proof_view.php,
+// benefit_document_view.php) and short-circuits with 304 if the browser
+// already has this exact file cached. The file itself never changes once
+// uploaded (KYC docs/payment proofs aren't re-uploaded in place), so it's
+// safe to cache aggressively even though it's a private, login-gated file.
+// ---------------------------------------------------------------
+function send_attachment_cache_headers($path) {
+    $etag = '"' . md5_file($path) . '"';
+    $last_modified = gmdate('D, d M Y H:i:s', filemtime($path)) . ' GMT';
+
+    header('Cache-Control: private, max-age=31536000, immutable');
+    header('ETag: ' . $etag);
+    header('Last-Modified: ' . $last_modified);
+
+    $if_none_match = $_SERVER['HTTP_IF_NONE_MATCH'] ?? '';
+    $if_modified_since = $_SERVER['HTTP_IF_MODIFIED_SINCE'] ?? '';
+    if ($if_none_match === $etag || $if_modified_since === $last_modified) {
+        http_response_code(304);
+        exit;
+    }
+}
+
+// ---------------------------------------------------------------
+// Default/reset password convention, shared across both modules: <prefix> +
+// the person's lowercase last name (e.g. "wellness" + "Menor" ->
+// "wellnessmenor"). basics_default_password() (basics/includes/functions.php)
+// is a thin wrapper over this with prefix "basics". Non-letter characters
+// are stripped from the surname so punctuation in a name never leaks into
+// the password.
+// ---------------------------------------------------------------
+function generate_default_password($prefix, $full_name) {
+    $parts = preg_split('/\s+/', trim($full_name));
+    $last_name = preg_replace('/[^a-zA-Z]/', '', end($parts));
+    return strtolower($prefix) . strtolower($last_name);
+}
+
+// ---------------------------------------------------------------
 // Notifications
 // ---------------------------------------------------------------
-// Sent when an admin approves a pending registration. Uses PHP's mail()
-// (needs a working sendmail/SMTP relay on the server to actually deliver —
-// on a bare XAMPP install this call will silently fail, which is fine
-// during local dev, but should be verified once this goes live).
-function send_account_approved_email($to_email, $full_name) {
+// Sent when an admin approves a pending registration, via send_email()
+// (Gmail SMTP — see config/email.example.php for setup). $password is the
+// default-pattern password (generate_default_password()) that approval just
+// reset the account to — the app never stores what the applicant originally
+// typed at registration (only its one-way hash), so this reset is the only
+// way to hand back a working password in the notification.
+function send_account_approved_email($to_email, $full_name, $username, $password) {
     if (empty($to_email)) {
         return false;
     }
-    $subject = 'Your ' . APP_NAME . ' account has been confirmed';
+    $module_name = 'JMC Foodies Wellness'; // runs outside page-render context, no $module_name variable available
+    $subject = 'Your ' . $module_name . ' account has been confirmed';
     $message = "Hi {$full_name},\r\n\r\n"
-        . 'Good news! Your ' . APP_NAME . " account has been reviewed and confirmed by our team.\r\n"
-        . "You can now log in and start earning.\r\n\r\n"
+        . 'Good news! Your ' . $module_name . " account has been reviewed and confirmed by our team.\r\n"
+        . "You can now log in:\r\n\r\n"
+        . "Username: {$username}\r\n"
+        . "Password: {$password}\r\n\r\n"
         . 'Log in here: ' . BASE_URL . "/login.php\r\n\r\n"
-        . '— ' . APP_NAME . ' Team';
-    $headers = 'From: ' . APP_NAME . ' <no-reply@' . preg_replace('/^www\./', '', parse_url(BASE_URL, PHP_URL_HOST) ?: 'localhost') . ">\r\n"
-        . 'Content-Type: text/plain; charset=UTF-8';
-    return mail($to_email, $subject, $message, $headers);
+        . "You'll be asked to set a new password the first time you log in.\r\n\r\n"
+        . '— ' . $module_name . ' Team';
+    return send_email($to_email, $subject, $message);
 }
 
 // Used by both admin/users.php and admin/user_view.php. Emails the user
@@ -98,7 +367,7 @@ function update_user_status($conn, $id, $new_status) {
         $new_status = 'active';
     }
 
-    $stmt = $conn->prepare("SELECT status, email, full_name FROM users WHERE id = ?");
+    $stmt = $conn->prepare("SELECT status, email, full_name, username FROM users WHERE id = ?");
     $stmt->bind_param('i', $id);
     $stmt->execute();
     $user = $stmt->get_result()->fetch_assoc();
@@ -113,8 +382,21 @@ function update_user_status($conn, $id, $new_status) {
     $stmt->execute();
     $stmt->close();
 
+    log_activity($conn, 'update_user_status', 'Set Wellness user "' . $user['full_name'] . '" status to ' . $new_status);
+
     if ($user['status'] === 'pending' && $new_status === 'active') {
-        send_account_approved_email($user['email'], $user['full_name']);
+        // Approval resets the login password to the default pattern
+        // (wellness + last name) so the confirmation email can show the
+        // member an actual working password, rather than just pointing
+        // back at whatever they typed at registration.
+        $new_password = generate_default_password('wellness', $user['full_name']);
+        $hash = password_hash($new_password, PASSWORD_DEFAULT);
+        $stmt = $conn->prepare("UPDATE users SET password_hash = ?, must_change_password = 1 WHERE id = ?");
+        $stmt->bind_param('si', $hash, $id);
+        $stmt->execute();
+        $stmt->close();
+
+        send_account_approved_email($user['email'], $user['full_name'], $user['username'], $new_password);
     }
 }
 
@@ -140,7 +422,7 @@ function generate_referral_code($conn) {
 function referral_link($code) {
     $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
     $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-    return $scheme . '://' . $host . BASE_URL . '/register.php?ref=' . urlencode($code);
+    return $scheme . '://' . $host . WELLNESS_URL . '/register.php?ref=' . urlencode($code);
 }
 
 // ---------------------------------------------------------------
@@ -183,7 +465,12 @@ function confirm_order_payment($conn, $order_id) {
     $stmt = $conn->prepare("UPDATE orders SET status = 'processing' WHERE id = ? AND status = 'pending'");
     $stmt->bind_param('i', $order_id);
     $stmt->execute();
+    $confirmed = $stmt->affected_rows > 0;
     $stmt->close();
+
+    if ($confirmed) {
+        log_activity($conn, 'confirm_order', 'Confirmed payment for Wellness order #' . $order_id);
+    }
 }
 
 // Admin marks the order delivered. This is the only place rewards are credited.
@@ -215,6 +502,8 @@ function mark_order_delivered($conn, $order_id, $admin_id) {
     $stmt->bind_param('ii', $admin_id, $order_id);
     $stmt->execute();
     $stmt->close();
+
+    log_activity($conn, 'deliver_order', 'Marked Wellness order #' . $order_id . ' as delivered');
 }
 
 // Cancels a pending/processing order. Refunds the wallet debit if it was a
@@ -247,4 +536,6 @@ function cancel_order($conn, $order_id) {
     $stmt->bind_param('i', $order_id);
     $stmt->execute();
     $stmt->close();
+
+    log_activity($conn, 'cancel_order', 'Cancelled Wellness order #' . $order_id);
 }

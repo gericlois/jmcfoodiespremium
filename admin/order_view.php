@@ -74,9 +74,9 @@ require __DIR__ . '/includes/admin_sidebar.php';
         <p class="mb-1">Quantity: <?= (int) $order['quantity'] ?></p>
         <p class="mb-1">Unit Price: <?= format_price($order['unit_price']) ?></p>
         <p class="mb-1">Total: <span class="fw-bold"><?= format_price($order['total_amount']) ?></span></p>
-        <p class="mb-1 text-capitalize">Payment Method: <?= sanitize($order['payment_method']) ?></p>
-        <?php if ($order['gcash_reference']): ?>
-          <p class="mb-1">GCash Reference: <?= sanitize($order['gcash_reference']) ?></p>
+        <p class="mb-1">Payment Method: <?= sanitize(payment_method_label($order['payment_method'])) ?></p>
+        <?php if ($order['payment_reference']): ?>
+          <p class="mb-1">Payment Reference: <?= sanitize($order['payment_reference']) ?></p>
         <?php endif; ?>
         <p class="mb-0">Status: <span class="pill pill-<?= $order['status'] ?>"><?= sanitize($order['status']) ?></span></p>
       </div>

@@ -111,22 +111,35 @@ function basics_get_member($conn, $user_id) {
     return $member ?: null;
 }
 
-// Sum of `placed` orders that don't yet have a payment covering their full
-// amount_due. A revolving ceiling, not a per-cycle reset — a member who
-// hasn't paid down prior weeks simply can't order more.
+// Sum of placed-but-unpaid orders (status 'pending' with placed_at set, or
+// 'confirmed' — anything after checkout but before the auto-transition to
+// 'paid'). A revolving ceiling, not a per-cycle reset — a member who hasn't
+// paid down prior weeks simply can't order more.
 function basics_outstanding_balance($conn, $member_id) {
     $stmt = $conn->prepare("SELECT COALESCE(SUM(o.total_amount), 0) AS outstanding
                              FROM basics_orders o
-                             WHERE o.member_id = ? AND o.status = 'placed'
-                               AND o.id NOT IN (
-                                   SELECT p.order_id FROM basics_payments p
-                                   WHERE p.order_id = o.id AND p.amount_paid >= o.total_amount
-                               )");
+                             WHERE o.member_id = ? AND o.placed_at IS NOT NULL
+                               AND o.status IN ('pending', 'confirmed')");
     $stmt->bind_param('i', $member_id);
     $stmt->execute();
     $row = $stmt->get_result()->fetch_assoc();
     $stmt->close();
     return (float) $row['outstanding'];
+}
+
+// The exact five order-status values this module supports (plus 'cancelled'
+// for admin use), mapped to the shared .pill-* CSS classes (style.css) —
+// single source of truth so every order listing renders status the same way.
+function basics_order_status_badge($status) {
+    $map = [
+        'pending' => 'pending',
+        'confirmed' => 'processing',
+        'paid' => 'approved',
+        'out for delivery' => 'shipped',
+        'delivered' => 'completed',
+        'cancelled' => 'cancelled',
+    ];
+    return $map[$status] ?? 'pending';
 }
 
 function basics_credit_available($conn, $member) {
@@ -235,14 +248,14 @@ function handle_payment_proof_upload($file_key) {
     return [$new_filename, null];
 }
 
-// This member's placed orders that aren't fully paid yet — populates the
+// This member's confirmed orders that aren't fully paid yet — populates the
 // "which order is this for" choice on the Grocery payment submission form.
 function basics_member_awaiting_orders($conn, $member_id) {
     $stmt = $conn->prepare("SELECT o.*, c.label AS cycle_label,
                                     (SELECT COALESCE(SUM(amount_paid),0) FROM basics_payments p WHERE p.order_id = o.id) AS amount_paid
                              FROM basics_orders o
                              JOIN basics_cycles c ON c.id = o.cycle_id
-                             WHERE o.member_id = ? AND o.status = 'placed'
+                             WHERE o.member_id = ? AND o.status = 'confirmed'
                              HAVING amount_paid < o.total_amount
                              ORDER BY o.created_at DESC");
     $stmt->bind_param('i', $member_id);
@@ -250,13 +263,15 @@ function basics_member_awaiting_orders($conn, $member_id) {
     return $stmt->get_result();
 }
 
-// Records a payment against a placed order, applying the late-payment
-// penalty tier + credit-line/suspension escalation in one transaction.
+// Records a payment against a confirmed order, applying the late-payment
+// penalty tier + credit-line/suspension escalation in one transaction. Once
+// the running total reaches the order's amount due, flips the order to
+// 'paid' — the trigger for admin to move it 'out for delivery'.
 // Returns ['is_late' => bool, 'penalty_amount' => float, 'membership_status' => string].
 function basics_record_payment($conn, $order_id, $amount_paid, $paid_at, $admin_id, $notes = null) {
     $stmt = $conn->prepare("SELECT o.*, c.payment_due_date
                              FROM basics_orders o JOIN basics_cycles c ON c.id = o.cycle_id
-                             WHERE o.id = ? AND o.status = 'placed' FOR UPDATE");
+                             WHERE o.id = ? AND o.status = 'confirmed' FOR UPDATE");
     $stmt->bind_param('i', $order_id);
     $stmt->execute();
     $order = $stmt->get_result()->fetch_assoc();
@@ -314,6 +329,14 @@ function basics_record_payment($conn, $order_id, $amount_paid, $paid_at, $admin_
         $offense_number, $is_late_int, $paid_at, $admin_id, $notes);
     $stmt->execute();
     $stmt->close();
+
+    $total_paid = (float) $conn->query("SELECT COALESCE(SUM(amount_paid),0) AS s FROM basics_payments WHERE order_id = " . (int) $order_id)->fetch_assoc()['s'];
+    if ($total_paid >= $amount_due) {
+        $stmt = $conn->prepare("UPDATE basics_orders SET status = 'paid' WHERE id = ? AND status = 'confirmed'");
+        $stmt->bind_param('i', $order_id);
+        $stmt->execute();
+        $stmt->close();
+    }
 
     $stmt = $conn->prepare("UPDATE basics_members SET
         offense_count = ?, consecutive_on_time_payments = ?, credit_limit_frozen = ?,

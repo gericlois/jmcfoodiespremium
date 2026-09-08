@@ -25,14 +25,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_t
         if ($product) {
             $conn->begin_transaction();
             try {
-                $stmt = $conn->prepare("SELECT id FROM basics_orders WHERE member_id = ? AND cycle_id = ? AND status = 'draft'");
+                $stmt = $conn->prepare("SELECT id FROM basics_orders WHERE member_id = ? AND cycle_id = ? AND status = 'pending' AND placed_at IS NULL");
                 $stmt->bind_param('ii', $member['id'], $cycle['id']);
                 $stmt->execute();
                 $order = $stmt->get_result()->fetch_assoc();
                 $stmt->close();
 
                 if (!$order) {
-                    $stmt = $conn->prepare("INSERT INTO basics_orders (member_id, cycle_id, status) VALUES (?, ?, 'draft')");
+                    $stmt = $conn->prepare("INSERT INTO basics_orders (member_id, cycle_id, status) VALUES (?, ?, 'pending')");
                     $stmt->bind_param('ii', $member['id'], $cycle['id']);
                     $stmt->execute();
                     $order_id = $stmt->insert_id;

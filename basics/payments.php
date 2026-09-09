@@ -44,7 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'submi
         if ($order_id <= 0) {
             $errors[] = 'Choose which order this payment is for.';
         } else {
-            $stmt = $conn->prepare("SELECT id FROM basics_orders WHERE id = ? AND member_id = ? AND status = 'confirmed'");
+            $stmt = $conn->prepare("SELECT id FROM basics_orders WHERE id = ? AND member_id = ? AND status = 'placed'");
             $stmt->bind_param('ii', $order_id, $member['id']);
             $stmt->execute();
             if (!$stmt->get_result()->fetch_assoc()) {

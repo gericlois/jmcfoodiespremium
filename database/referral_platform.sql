@@ -264,12 +264,8 @@ CREATE TABLE basics_orders (
     member_id INT NOT NULL,
     cycle_id INT NOT NULL,
     total_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
-    -- 'pending' covers both the not-yet-placed cart (placed_at IS NULL) and a
-    -- placed order awaiting admin confirmation (placed_at IS NOT NULL).
-    status ENUM('pending','confirmed','paid','out for delivery','delivered','cancelled') NOT NULL DEFAULT 'pending',
+    status ENUM('draft','placed','delivered','cancelled') NOT NULL DEFAULT 'draft',
     placed_at TIMESTAMP NULL DEFAULT NULL,
-    confirmed_at TIMESTAMP NULL DEFAULT NULL,
-    out_for_delivery_at TIMESTAMP NULL DEFAULT NULL,
     delivered_at TIMESTAMP NULL DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (member_id) REFERENCES basics_members(id) ON DELETE CASCADE,

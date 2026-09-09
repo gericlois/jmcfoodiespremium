@@ -14,7 +14,7 @@ $errors = [];
 
 $order = null;
 if ($cycle) {
-    $stmt = $conn->prepare("SELECT * FROM basics_orders WHERE member_id = ? AND cycle_id = ? AND status = 'pending' AND placed_at IS NULL");
+    $stmt = $conn->prepare("SELECT * FROM basics_orders WHERE member_id = ? AND cycle_id = ? AND status = 'draft'");
     $stmt->bind_param('ii', $member['id'], $cycle['id']);
     $stmt->execute();
     $order = $stmt->get_result()->fetch_assoc();
@@ -51,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $order) {
             } elseif ($order['total_amount'] > $available) {
                 $errors[] = 'This order (' . format_price($order['total_amount']) . ') exceeds your available credit (' . format_price($available) . ').';
             } else {
-                $stmt = $conn->prepare("UPDATE basics_orders SET placed_at = NOW() WHERE id = ?");
+                $stmt = $conn->prepare("UPDATE basics_orders SET status = 'placed', placed_at = NOW() WHERE id = ?");
                 $stmt->bind_param('i', $order['id']);
                 $stmt->execute();
                 $stmt->close();

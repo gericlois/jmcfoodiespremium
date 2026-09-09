@@ -331,7 +331,6 @@
 .pill-rejected { background: var(--primary); }
 .pill-suspended { background: #999; }
 .pill-active { background: var(--green); }
-.pill-shipped { background: #f59e0b; }
 
 .amount-credit { color: var(--green); font-weight: 600; }
 .amount-debit { color: var(--primary); font-weight: 600; }

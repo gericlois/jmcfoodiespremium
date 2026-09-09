@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'send_
                              JOIN basics_members bm ON bm.id = o.member_id
                              JOIN basics_users u ON u.id = bm.user_id
                              JOIN basics_cycles c ON c.id = o.cycle_id
-                             WHERE o.status = 'confirmed' AND $condition
+                             WHERE o.status = 'placed' AND $condition
                              HAVING amount_paid < o.total_amount");
     $stmt->execute();
     $orders = $stmt->get_result();
@@ -51,7 +51,7 @@ $stmt = $conn->prepare("SELECT o.id AS order_id, o.total_amount, u.full_name, u.
                          JOIN basics_members bm ON bm.id = o.member_id
                          JOIN basics_users u ON u.id = bm.user_id
                          JOIN basics_cycles c ON c.id = o.cycle_id
-                         WHERE o.status = 'confirmed' AND c.payment_due_date = CURDATE()
+                         WHERE o.status = 'placed' AND c.payment_due_date = CURDATE()
                          HAVING amount_paid < o.total_amount
                          ORDER BY o.id ASC");
 $stmt->execute();
@@ -63,7 +63,7 @@ $stmt = $conn->prepare("SELECT o.id AS order_id, o.total_amount, u.full_name, u.
                          JOIN basics_members bm ON bm.id = o.member_id
                          JOIN basics_users u ON u.id = bm.user_id
                          JOIN basics_cycles c ON c.id = o.cycle_id
-                         WHERE o.status = 'confirmed' AND c.payment_due_date = DATE_ADD(CURDATE(), INTERVAL 1 DAY)
+                         WHERE o.status = 'placed' AND c.payment_due_date = DATE_ADD(CURDATE(), INTERVAL 1 DAY)
                          HAVING amount_paid < o.total_amount
                          ORDER BY o.id ASC");
 $stmt->execute();

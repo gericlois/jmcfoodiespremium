@@ -8,8 +8,6 @@ require __DIR__ . '/../includes/functions.php';
 require_basics_admin_login();
 
 $id = (int) ($_GET['id'] ?? 0);
-$email_errors = [];
-$sms_errors = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
@@ -63,64 +61,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             log_activity($conn, 'reset_basics_password', 'Reset password for Basics member #' . $id . ' to the default pattern');
             redirect('/basics/admin/member_view.php?id=' . $id . '&new_password=' . urlencode($new_password));
         }
-    } elseif ($action === 'send_email') {
-        $stmt = $conn->prepare("SELECT full_name, email FROM basics_users u JOIN basics_members bm ON bm.user_id = u.id WHERE bm.id = ?");
-        $stmt->bind_param('i', $id);
-        $stmt->execute();
-        $target = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
-
-        $email_subject = trim($_POST['email_subject'] ?? '');
-        $email_message = trim($_POST['email_message'] ?? '');
-
-        if (empty($target['email'])) {
-            $email_errors[] = 'This member has no email address on file.';
-        }
-        if ($email_subject === '') {
-            $email_errors[] = 'Enter a subject.';
-        }
-        if ($email_message === '') {
-            $email_errors[] = 'Enter a message.';
-        }
-
-        if (empty($email_errors)) {
-            if (send_email($target['email'], $email_subject, "Hi {$target['full_name']},\r\n\r\n{$email_message}\r\n\r\n— JMC Foodies Basics Team")) {
-                log_activity($conn, 'send_basics_member_email', 'Emailed Basics member #' . $id . ' (subject: ' . $email_subject . ')');
-                redirect('/basics/admin/member_view.php?id=' . $id . '&email_sent=1');
-            } else {
-                $email_errors[] = 'Failed to send — check the Gmail SMTP configuration (config/email.php).';
-            }
-        }
-    } elseif ($action === 'send_sms') {
-        $stmt = $conn->prepare("SELECT contact_number FROM basics_users u JOIN basics_members bm ON bm.user_id = u.id WHERE bm.id = ?");
-        $stmt->bind_param('i', $id);
-        $stmt->execute();
-        $target = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
-
-        $sms_message = trim($_POST['sms_message'] ?? '');
-
-        if (empty($target['contact_number'])) {
-            $sms_errors[] = 'This member has no contact number on file.';
-        }
-        if ($sms_message === '') {
-            $sms_errors[] = 'Enter a message.';
-        } elseif (strlen($sms_message) > 480) {
-            $sms_errors[] = 'Message is too long (max 480 characters, about 3 SMS segments).';
-        }
-
-        if (empty($sms_errors)) {
-            if (send_sms($target['contact_number'], $sms_message)) {
-                log_activity($conn, 'send_basics_member_sms', 'Texted Basics member #' . $id);
-                redirect('/basics/admin/member_view.php?id=' . $id . '&sms_sent=1');
-            } else {
-                $sms_errors[] = 'Failed to send — check the Semaphore SMS configuration (config/sms.php).';
-            }
-        }
     }
-    if ($action !== 'send_email' && $action !== 'send_sms') {
-        redirect('/basics/admin/member_view.php?id=' . $id);
-    }
+    redirect('/basics/admin/member_view.php?id=' . $id);
 }
 
 $stmt = $conn->prepare("SELECT bm.*, u.full_name, u.username, u.email, u.contact_number
@@ -138,7 +80,7 @@ $outstanding = basics_outstanding_balance($conn, $member['id']);
 
 $stmt = $conn->prepare("SELECT o.*, c.label AS cycle_label FROM basics_orders o
                          JOIN basics_cycles c ON c.id = o.cycle_id
-                         WHERE o.member_id = ? AND o.placed_at IS NOT NULL ORDER BY o.created_at DESC LIMIT 10");
+                         WHERE o.member_id = ? AND o.status != 'draft' ORDER BY o.created_at DESC LIMIT 10");
 $stmt->bind_param('i', $id);
 $stmt->execute();
 $orders = $stmt->get_result();
@@ -163,22 +105,6 @@ require __DIR__ . '/includes/admin_sidebar.php';
   <?php if (isset($_GET['new_password'])): ?>
     <div class="sucmsg is-visible mb-4">
       <p class="mb-0">Password reset. New password: <strong><?= sanitize($_GET['new_password']) ?></strong> — share this with the member; they'll be required to set their own on next login.</p>
-    </div>
-  <?php endif; ?>
-  <?php if (isset($_GET['email_sent'])): ?>
-    <div class="sucmsg is-visible mb-4"><p class="mb-0">Email sent to <?= sanitize($member['email']) ?>.</p></div>
-  <?php endif; ?>
-  <?php if (isset($_GET['sms_sent'])): ?>
-    <div class="sucmsg is-visible mb-4"><p class="mb-0">Text sent to <?= sanitize($member['contact_number']) ?>.</p></div>
-  <?php endif; ?>
-  <?php if ($email_errors): ?>
-    <div class="errmsg mb-4">
-      <ul class="mb-0"><?php foreach ($email_errors as $error): ?><li><?= sanitize($error) ?></li><?php endforeach; ?></ul>
-    </div>
-  <?php endif; ?>
-  <?php if ($sms_errors): ?>
-    <div class="errmsg mb-4">
-      <ul class="mb-0"><?php foreach ($sms_errors as $error): ?><li><?= sanitize($error) ?></li><?php endforeach; ?></ul>
     </div>
   <?php endif; ?>
 
@@ -256,43 +182,6 @@ require __DIR__ . '/includes/admin_sidebar.php';
           <button type="submit" class="btn-chip btn-chip-success"><i class="fas fa-floppy-disk"></i> Save</button>
         </form>
       </div>
-
-      <div class="panel-card mt-4">
-        <h2 class="h6">Send Email</h2>
-        <?php if (empty($member['email'])): ?>
-          <p class="text-muted small mb-0">This member has no email address on file.</p>
-        <?php else: ?>
-          <form method="post">
-            <input type="hidden" name="action" value="send_email">
-            <div class="mb-2">
-              <label class="flbl">Subject</label>
-              <input type="text" name="email_subject" class="fctrl" required>
-            </div>
-            <div class="mb-2">
-              <label class="flbl">Message</label>
-              <textarea name="email_message" class="fctrl" rows="4" required></textarea>
-            </div>
-            <button type="submit" class="btn-chip btn-chip-success" onclick="return confirm('Send this email to <?= sanitize($member['email']) ?>?');"><i class="fas fa-paper-plane"></i> Send Email</button>
-          </form>
-        <?php endif; ?>
-      </div>
-
-      <div class="panel-card mt-4">
-        <h2 class="h6">Send SMS</h2>
-        <?php if (empty($member['contact_number'])): ?>
-          <p class="text-muted small mb-0">This member has no contact number on file.</p>
-        <?php else: ?>
-          <form method="post">
-            <input type="hidden" name="action" value="send_sms">
-            <div class="mb-2">
-              <label class="flbl">Message</label>
-              <textarea name="sms_message" class="fctrl" rows="3" maxlength="480" required></textarea>
-              <div class="form-text">Max 480 characters (~3 SMS segments).</div>
-            </div>
-            <button type="submit" class="btn-chip btn-chip-success" onclick="return confirm('Send this SMS to <?= sanitize($member['contact_number']) ?>? This will use real SMS credits.');"><i class="fas fa-comment-sms"></i> Send SMS</button>
-          </form>
-        <?php endif; ?>
-      </div>
     </div>
 
     <div class="col-12 col-md-6">
@@ -308,7 +197,7 @@ require __DIR__ . '/includes/admin_sidebar.php';
             <tr>
               <td><?= sanitize($o['cycle_label']) ?></td>
               <td><?= format_price($o['total_amount']) ?></td>
-              <td><span class="pill pill-<?= basics_order_status_badge($o['status']) ?>"><?= sanitize($o['status']) ?></span></td>
+              <td><span class="pill pill-<?= $o['status'] === 'placed' ? 'processing' : ($o['status'] === 'delivered' ? 'completed' : 'cancelled') ?>"><?= sanitize($o['status']) ?></span></td>
             </tr>
           <?php endwhile; ?>
           </tbody>

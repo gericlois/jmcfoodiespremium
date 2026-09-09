@@ -38,7 +38,7 @@ $stmt = $conn->prepare("SELECT o.*, u.full_name, u.username, c.label AS cycle_la
                          JOIN basics_members bm ON bm.id = o.member_id
                          JOIN basics_users u ON u.id = bm.user_id
                          JOIN basics_cycles c ON c.id = o.cycle_id
-                         WHERE o.status = 'confirmed'
+                         WHERE o.status = 'placed'
                          HAVING amount_paid < o.total_amount
                          ORDER BY c.payment_due_date ASC");
 $stmt->execute();

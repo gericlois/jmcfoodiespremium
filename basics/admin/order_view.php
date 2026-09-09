@@ -9,45 +9,22 @@ require_basics_admin_login();
 
 $id = (int) ($_GET['id'] ?? 0);
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confirm') {
-    $stmt = $conn->prepare("UPDATE basics_orders SET status = 'confirmed', confirmed_at = NOW() WHERE id = ? AND status = 'pending' AND placed_at IS NOT NULL");
-    $stmt->bind_param('i', $id);
-    $stmt->execute();
-    $confirmed = $stmt->affected_rows > 0;
-    $stmt->close();
-    if ($confirmed) {
-        log_activity($conn, 'confirm_basics_order', 'Confirmed Basics order #' . $id);
-        $member = basics_member_by_order_id($conn, $id);
-        if ($member) {
-            basics_notify($conn, $member, "Hi {$member['full_name']}, your order has been confirmed. Please settle payment during the payment period so it can be delivered. - JMC Foodies Basics");
-        }
-    }
-    redirect('/basics/admin/order_view.php?id=' . $id);
-} elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'dispatch') {
-    $stmt = $conn->prepare("UPDATE basics_orders SET status = 'out for delivery', out_for_delivery_at = NOW() WHERE id = ? AND status = 'paid'");
-    $stmt->bind_param('i', $id);
-    $stmt->execute();
-    $dispatched = $stmt->affected_rows > 0;
-    $stmt->close();
-    if ($dispatched) {
-        log_activity($conn, 'dispatch_basics_order', 'Marked Basics order #' . $id . ' as out for delivery');
-        $member = basics_member_by_order_id($conn, $id);
-        if ($member) {
-            basics_notify($conn, $member, "Hi {$member['full_name']}, your order is out for delivery! - JMC Foodies Basics");
-        }
-    }
-    redirect('/basics/admin/order_view.php?id=' . $id);
-} elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'deliver') {
-    $stmt = $conn->prepare("UPDATE basics_orders SET status = 'delivered', delivered_at = NOW() WHERE id = ? AND status = 'out for delivery'");
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'deliver') {
+    $stmt = $conn->prepare("UPDATE basics_orders SET status = 'delivered', delivered_at = NOW() WHERE id = ? AND status = 'placed'");
     $stmt->bind_param('i', $id);
     $stmt->execute();
     $delivered = $stmt->affected_rows > 0;
     $stmt->close();
     if ($delivered) {
         log_activity($conn, 'deliver_basics_order', 'Marked Basics order #' . $id . ' as delivered');
+        $stmt = $conn->prepare("SELECT payment_due_date FROM basics_orders o JOIN basics_cycles c ON c.id = o.cycle_id WHERE o.id = ?");
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        $due_date = $stmt->get_result()->fetch_assoc()['payment_due_date'] ?? null;
+        $stmt->close();
         $member = basics_member_by_order_id($conn, $id);
-        if ($member) {
-            basics_notify($conn, $member, "Hi {$member['full_name']}, your order has been delivered! - JMC Foodies Basics");
+        if ($member && $due_date) {
+            basics_notify($conn, $member, "Hi {$member['full_name']}, your order has been delivered! Please settle your balance by " . date('M j, Y', strtotime($due_date)) . ". - JMC Foodies Basics");
         }
     }
     redirect('/basics/admin/order_view.php?id=' . $id);
@@ -101,7 +78,7 @@ require __DIR__ . '/includes/admin_sidebar.php';
         <p class="mb-1">Member: <?= sanitize($order['full_name']) ?> (<?= sanitize($order['username']) ?>)</p>
         <p class="mb-1">Cycle: <?= sanitize($order['cycle_label']) ?></p>
         <p class="mb-1">Payment Due: <?= date('M j, Y', strtotime($order['payment_due_date'])) ?></p>
-        <p class="mb-0">Status: <span class="pill pill-<?= basics_order_status_badge($order['status']) ?>"><?= sanitize($order['status']) ?></span></p>
+        <p class="mb-0">Status: <span class="pill pill-<?= $order['status'] === 'placed' ? 'processing' : ($order['status'] === 'delivered' ? 'completed' : 'cancelled') ?>"><?= sanitize($order['status']) ?></span></p>
       </div>
 
       <div class="table-responsive">
@@ -127,19 +104,9 @@ require __DIR__ . '/includes/admin_sidebar.php';
         <h2 class="h6">Payment</h2>
         <p class="mb-1">Amount Due: <?= format_price($order['total_amount']) ?></p>
         <p class="mb-3">Amount Paid: <span class="fw-bold"><?= format_price($amount_paid) ?></span></p>
-        <?php if ($order['status'] === 'pending'): ?>
-          <form method="post">
-            <input type="hidden" name="action" value="confirm">
-            <button type="submit" class="btn-chip btn-chip-success" onclick="return confirm('Confirm this order?');">Confirm Order</button>
-          </form>
-        <?php elseif ($order['status'] === 'confirmed' && $amount_paid < $order['total_amount']): ?>
+        <?php if ($order['status'] === 'placed' && $amount_paid < $order['total_amount']): ?>
           <a href="<?= BASE_URL ?>/basics/admin/payments.php?order_id=<?= (int) $order['id'] ?>" class="btn-chip btn-chip-success">Record Payment</a>
-        <?php elseif ($order['status'] === 'paid'): ?>
-          <form method="post">
-            <input type="hidden" name="action" value="dispatch">
-            <button type="submit" class="btn-chip btn-chip-success" onclick="return confirm('Mark this order as out for delivery?');">Out for Delivery</button>
-          </form>
-        <?php elseif ($order['status'] === 'out for delivery'): ?>
+        <?php elseif ($order['status'] === 'placed'): ?>
           <form method="post">
             <input type="hidden" name="action" value="deliver">
             <button type="submit" class="btn-chip btn-chip-success" onclick="return confirm('Mark this order as delivered?');">Mark Delivered</button>

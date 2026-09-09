@@ -13,7 +13,7 @@ $id = (int) ($_GET['id'] ?? 0);
 
 $stmt = $conn->prepare("SELECT o.*, c.label AS cycle_label, c.payment_due_date, c.delivery_date FROM basics_orders o
                          JOIN basics_cycles c ON c.id = o.cycle_id
-                         WHERE o.id = ? AND o.member_id = ? AND o.placed_at IS NOT NULL");
+                         WHERE o.id = ? AND o.member_id = ? AND o.status != 'draft'");
 $stmt->bind_param('ii', $id, $member['id']);
 $stmt->execute();
 $order = $stmt->get_result()->fetch_assoc();
@@ -35,6 +35,8 @@ $stmt->bind_param('i', $id);
 $stmt->execute();
 $payments = $stmt->get_result();
 
+$pill_map = ['placed' => 'processing', 'delivered' => 'completed', 'cancelled' => 'cancelled'];
+
 $page_title = 'Order #' . $order['id'];
 require __DIR__ . '/../includes/header.php';
 require __DIR__ . '/../includes/navbar.php';
@@ -55,7 +57,7 @@ require __DIR__ . '/../includes/navbar.php';
         <p class="mb-1">Cycle: <?= sanitize($order['cycle_label']) ?></p>
         <p class="mb-1">Payment Due: <?= date('M j, Y', strtotime($order['payment_due_date'])) ?></p>
         <p class="mb-1">Delivery: <?= date('M j, Y', strtotime($order['delivery_date'])) ?></p>
-        <p class="mb-0">Status: <span class="pill pill-<?= basics_order_status_badge($order['status']) ?>"><?= sanitize($order['status']) ?></span></p>
+        <p class="mb-0">Status: <span class="pill pill-<?= $pill_map[$order['status']] ?? 'pending' ?>"><?= sanitize($order['status']) ?></span></p>
       </div>
 
       <div class="table-responsive">

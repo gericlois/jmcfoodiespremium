@@ -197,7 +197,8 @@ require __DIR__ . '/includes/admin_sidebar.php';
             <tr>
               <td><?= sanitize($o['cycle_label']) ?></td>
               <td><?= format_price($o['total_amount']) ?></td>
-              <td><span class="pill pill-<?= $o['status'] === 'placed' ? 'processing' : ($o['status'] === 'delivered' ? 'completed' : 'cancelled') ?>"><?= sanitize($o['status']) ?></span></td>
+              <?php $pill_map = ['pending' => 'processing', 'paid' => 'approved', 'delivered' => 'completed', 'cancelled' => 'cancelled']; ?>
+              <td><span class="pill pill-<?= $pill_map[$o['status']] ?? 'pending' ?>"><?= sanitize($o['status']) ?></span></td>
             </tr>
           <?php endwhile; ?>
           </tbody>

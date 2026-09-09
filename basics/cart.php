@@ -51,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $order) {
             } elseif ($order['total_amount'] > $available) {
                 $errors[] = 'This order (' . format_price($order['total_amount']) . ') exceeds your available credit (' . format_price($available) . ').';
             } else {
-                $stmt = $conn->prepare("UPDATE basics_orders SET status = 'placed', placed_at = NOW() WHERE id = ?");
+                $stmt = $conn->prepare("UPDATE basics_orders SET status = 'pending', placed_at = NOW() WHERE id = ?");
                 $stmt->bind_param('i', $order['id']);
                 $stmt->execute();
                 $stmt->close();

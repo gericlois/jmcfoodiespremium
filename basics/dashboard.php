@@ -110,7 +110,7 @@ require __DIR__ . '/../includes/navbar.php';
               <tr>
                 <td><?= sanitize($o['cycle_label']) ?></td>
                 <td><?= format_price($o['total_amount']) ?></td>
-                <?php $pill_map = ['draft' => 'pending', 'placed' => 'processing', 'delivered' => 'completed', 'cancelled' => 'cancelled']; ?>
+                <?php $pill_map = ['draft' => 'pending', 'pending' => 'processing', 'paid' => 'approved', 'delivered' => 'completed', 'cancelled' => 'cancelled']; ?>
                 <td><span class="pill pill-<?= $pill_map[$o['status']] ?? 'pending' ?>"><?= sanitize($o['status']) ?></span></td>
                 <td><?= date('M j, Y', strtotime($o['created_at'])) ?></td>
               </tr>

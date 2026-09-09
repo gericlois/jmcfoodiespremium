@@ -264,7 +264,9 @@ CREATE TABLE basics_orders (
     member_id INT NOT NULL,
     cycle_id INT NOT NULL,
     total_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
-    status ENUM('draft','placed','delivered','cancelled') NOT NULL DEFAULT 'draft',
+    -- status flips to 'paid' automatically (basics_record_payment(),
+    -- basics/includes/functions.php) once payments cover total_amount.
+    status ENUM('draft','pending','paid','delivered','cancelled') NOT NULL DEFAULT 'draft',
     placed_at TIMESTAMP NULL DEFAULT NULL,
     delivered_at TIMESTAMP NULL DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

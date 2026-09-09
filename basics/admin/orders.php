@@ -9,7 +9,7 @@ require_basics_admin_login();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'deliver') {
     $id = (int) ($_POST['id'] ?? 0);
-    $stmt = $conn->prepare("UPDATE basics_orders SET status = 'delivered', delivered_at = NOW() WHERE id = ? AND status = 'placed'");
+    $stmt = $conn->prepare("UPDATE basics_orders SET status = 'delivered', delivered_at = NOW() WHERE id = ? AND status = 'paid'");
     $stmt->bind_param('i', $id);
     $stmt->execute();
     $delivered = $stmt->affected_rows > 0;
@@ -27,9 +27,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'deliv
         }
     }
     redirect('/basics/admin/orders.php');
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'cancel') {
+    $id = (int) ($_POST['id'] ?? 0);
+    $stmt = $conn->prepare("UPDATE basics_orders SET status = 'cancelled' WHERE id = ? AND status = 'pending'");
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    $cancelled = $stmt->affected_rows > 0;
+    $stmt->close();
+    if ($cancelled) {
+        log_activity($conn, 'cancel_basics_order', 'Cancelled Basics order #' . $id);
+        $member = basics_member_by_order_id($conn, $id);
+        if ($member) {
+            basics_notify($conn, $member, "Hi {$member['full_name']}, your order #{$id} has been cancelled. - JMC Foodies Basics");
+        }
+    }
+    redirect('/basics/admin/orders.php');
 }
 
-$valid_statuses = ['placed', 'delivered', 'cancelled'];
+$valid_statuses = ['pending', 'paid', 'delivered', 'cancelled'];
+$pill_map = ['pending' => 'processing', 'paid' => 'approved', 'delivered' => 'completed', 'cancelled' => 'cancelled'];
 $status_filter = $_GET['status'] ?? '';
 
 $sql = "SELECT o.*, u.full_name, u.username, c.label AS cycle_label,
@@ -82,11 +98,17 @@ require __DIR__ . '/includes/admin_sidebar.php';
           <td><?= sanitize($o['cycle_label']) ?></td>
           <td><?= format_price($o['total_amount']) ?></td>
           <td><?= format_price($o['amount_paid']) ?></td>
-          <td><span class="pill pill-<?= $o['status'] === 'placed' ? 'processing' : ($o['status'] === 'delivered' ? 'completed' : 'cancelled') ?>"><?= sanitize($o['status']) ?></span></td>
+          <td><span class="pill pill-<?= $pill_map[$o['status']] ?? 'pending' ?>"><?= sanitize($o['status']) ?></span></td>
           <td><?= date('M j, Y', strtotime($o['created_at'])) ?></td>
           <td class="no-print">
             <a href="<?= BASE_URL ?>/basics/admin/order_view.php?id=<?= (int) $o['id'] ?>" class="btn-chip btn-chip-outline">View</a>
-            <?php if ($o['status'] === 'placed' && $o['amount_paid'] >= $o['total_amount']): ?>
+            <?php if ($o['status'] === 'pending'): ?>
+              <form method="post" class="d-inline">
+                <input type="hidden" name="action" value="cancel">
+                <input type="hidden" name="id" value="<?= (int) $o['id'] ?>">
+                <button type="submit" class="btn-chip btn-chip-outline" onclick="return confirm('Cancel this order? This cannot be undone.');">Cancel</button>
+              </form>
+            <?php elseif ($o['status'] === 'paid'): ?>
               <form method="post" class="d-inline">
                 <input type="hidden" name="action" value="deliver">
                 <input type="hidden" name="id" value="<?= (int) $o['id'] ?>">

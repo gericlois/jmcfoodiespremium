@@ -11,6 +11,7 @@ $sub_to_parent = [
     '/basics/admin/member_view.php'      => '/basics/admin/members.php',
     '/basics/admin/product_edit.php'     => '/basics/admin/products.php',
     '/basics/admin/order_view.php'       => '/basics/admin/orders.php',
+    '/basics/admin/delivery_receipt.php' => '/basics/admin/orders.php',
 ];
 $current_path = $sub_to_parent[$current_path] ?? $current_path;
 

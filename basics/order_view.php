@@ -11,6 +11,18 @@ require_basics_access($conn);
 $member = basics_get_member($conn, basics_current_user_id());
 $id = (int) ($_GET['id'] ?? 0);
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'cancel') {
+    $stmt = $conn->prepare("UPDATE basics_orders SET status = 'cancelled' WHERE id = ? AND member_id = ? AND status = 'pending'");
+    $stmt->bind_param('ii', $id, $member['id']);
+    $stmt->execute();
+    $cancelled = $stmt->affected_rows > 0;
+    $stmt->close();
+    if ($cancelled) {
+        redirect('/basics/order_view.php?id=' . $id . '&cancelled=1');
+    }
+    redirect('/basics/order_view.php?id=' . $id);
+}
+
 $stmt = $conn->prepare("SELECT o.*, c.label AS cycle_label, c.payment_due_date, c.delivery_date FROM basics_orders o
                          JOIN basics_cycles c ON c.id = o.cycle_id
                          WHERE o.id = ? AND o.member_id = ? AND o.status != 'draft'");
@@ -35,7 +47,7 @@ $stmt->bind_param('i', $id);
 $stmt->execute();
 $payments = $stmt->get_result();
 
-$pill_map = ['placed' => 'processing', 'delivered' => 'completed', 'cancelled' => 'cancelled'];
+$pill_map = ['pending' => 'processing', 'paid' => 'approved', 'delivered' => 'completed', 'cancelled' => 'cancelled'];
 
 $page_title = 'Order #' . $order['id'];
 require __DIR__ . '/../includes/header.php';
@@ -50,6 +62,9 @@ require __DIR__ . '/../includes/navbar.php';
 </div>
 
 <div class="container py-5">
+  <?php if (isset($_GET['cancelled'])): ?>
+    <div class="sucmsg is-visible mb-4"><p class="mb-0">Order cancelled.</p></div>
+  <?php endif; ?>
   <div class="row g-4">
     <div class="col-12 col-md-7">
       <div class="panel-card mb-4">
@@ -57,7 +72,13 @@ require __DIR__ . '/../includes/navbar.php';
         <p class="mb-1">Cycle: <?= sanitize($order['cycle_label']) ?></p>
         <p class="mb-1">Payment Due: <?= date('M j, Y', strtotime($order['payment_due_date'])) ?></p>
         <p class="mb-1">Delivery: <?= date('M j, Y', strtotime($order['delivery_date'])) ?></p>
-        <p class="mb-0">Status: <span class="pill pill-<?= $pill_map[$order['status']] ?? 'pending' ?>"><?= sanitize($order['status']) ?></span></p>
+        <p class="mb-2">Status: <span class="pill pill-<?= $pill_map[$order['status']] ?? 'pending' ?>"><?= sanitize($order['status']) ?></span></p>
+        <?php if ($order['status'] === 'pending'): ?>
+          <form method="post">
+            <input type="hidden" name="action" value="cancel">
+            <button type="submit" class="btn-chip btn-chip-outline" onclick="return confirm('Cancel this order? This cannot be undone.');"><i class="fas fa-xmark"></i> Cancel Order</button>
+          </form>
+        <?php endif; ?>
       </div>
 
       <div class="table-responsive">

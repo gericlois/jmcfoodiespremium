@@ -8,10 +8,10 @@ require_basics_admin_login();
 
 $pending_basics_applications = $conn->query("SELECT COUNT(*) AS c FROM basics_members WHERE application_status = 'pending'")->fetch_assoc()['c'];
 $active_basics_members = $conn->query("SELECT COUNT(*) AS c FROM basics_members WHERE application_status = 'approved' AND membership_status = 'active'")->fetch_assoc()['c'];
-$basics_orders_awaiting_payment = $conn->query("SELECT COUNT(*) AS c FROM basics_orders o WHERE o.status = 'placed'
+$basics_orders_awaiting_payment = $conn->query("SELECT COUNT(*) AS c FROM basics_orders o WHERE o.status = 'pending'
     AND o.total_amount > (SELECT COALESCE(SUM(amount_paid),0) FROM basics_payments p WHERE p.order_id = o.id)")->fetch_assoc()['c'];
 $basics_outstanding_total = (float) $conn->query("SELECT COALESCE(SUM(o.total_amount - IFNULL((SELECT SUM(amount_paid) FROM basics_payments p WHERE p.order_id = o.id), 0)), 0) AS s
-    FROM basics_orders o WHERE o.status = 'placed'")->fetch_assoc()['s'];
+    FROM basics_orders o WHERE o.status = 'pending'")->fetch_assoc()['s'];
 
 $recent_basics_applications = $conn->query("SELECT bm.*, u.full_name, u.username FROM basics_members bm
     JOIN basics_users u ON u.id = bm.user_id WHERE bm.application_status = 'pending' ORDER BY bm.applied_at DESC LIMIT 5");
@@ -78,7 +78,8 @@ require __DIR__ . '/includes/admin_sidebar.php';
         <tr>
           <td><?= sanitize($o['full_name']) ?></td>
           <td><?= format_price($o['total_amount']) ?></td>
-          <td><span class="pill pill-<?= $o['status'] === 'placed' ? 'processing' : ($o['status'] === 'delivered' ? 'completed' : 'cancelled') ?>"><?= sanitize($o['status']) ?></span></td>
+          <?php $pill_map = ['pending' => 'processing', 'paid' => 'approved', 'delivered' => 'completed', 'cancelled' => 'cancelled']; ?>
+          <td><span class="pill pill-<?= $pill_map[$o['status']] ?? 'pending' ?>"><?= sanitize($o['status']) ?></span></td>
           <td><a href="<?= BASE_URL ?>/basics/admin/order_view.php?id=<?= (int) $o['id'] ?>" class="btn-chip btn-chip-outline">View</a></td>
         </tr>
       <?php endwhile; ?>

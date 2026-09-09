@@ -44,7 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'submi
         if ($order_id <= 0) {
             $errors[] = 'Choose which order this payment is for.';
         } else {
-            $stmt = $conn->prepare("SELECT id FROM basics_orders WHERE id = ? AND member_id = ? AND status = 'placed'");
+            $stmt = $conn->prepare("SELECT id FROM basics_orders WHERE id = ? AND member_id = ? AND status = 'pending'");
             $stmt->bind_param('ii', $order_id, $member['id']);
             $stmt->execute();
             if (!$stmt->get_result()->fetch_assoc()) {
@@ -123,7 +123,9 @@ while ($row = $outstanding_loans->fetch_assoc()) {
     $outstanding_loans_list[] = $row;
 }
 
-$stmt = $conn->prepare("SELECT * FROM basics_payment_submissions WHERE member_id = ? ORDER BY created_at DESC");
+$stmt = $conn->prepare("SELECT s.*, o.status AS order_status FROM basics_payment_submissions s
+                         LEFT JOIN basics_orders o ON o.id = s.order_id
+                         WHERE s.member_id = ? ORDER BY s.created_at DESC");
 $stmt->bind_param('i', $member['id']);
 $stmt->execute();
 $submissions = $stmt->get_result();
@@ -324,10 +326,11 @@ require __DIR__ . '/../includes/navbar.php';
         <?php $for_labels = ['grocery' => 'Grocery', 'loan' => 'Loan', 'other' => 'Other']; ?>
         <?php $status_pill = ['pending' => 'pending', 'confirmed' => 'approved', 'rejected' => 'rejected']; ?>
         <?php while ($s = $submissions->fetch_assoc()): ?>
+          <?php $is_order_paid = $s['order_status'] === 'paid' || $s['order_status'] === 'delivered'; ?>
           <tr>
             <td><?= $for_labels[$s['payment_for']] ?? sanitize($s['payment_for']) ?><?= $s['order_id'] ? ' #' . (int) $s['order_id'] : '' ?><?= $s['loan_request_id'] ? ' #' . (int) $s['loan_request_id'] : '' ?></td>
             <td><?= format_price($s['amount']) ?></td>
-            <td><span class="pill pill-<?= $status_pill[$s['status']] ?? 'pending' ?>"><?= ucfirst($s['status']) ?></span></td>
+            <td><span class="pill pill-<?= $is_order_paid ? 'approved' : ($status_pill[$s['status']] ?? 'pending') ?>"><?= $is_order_paid ? 'Paid' : ucfirst($s['status']) ?></span></td>
             <td><?= date('M j, Y', strtotime($s['created_at'])) ?></td>
           </tr>
           <?php if ($s['status'] === 'rejected' && $s['admin_notes']): ?>

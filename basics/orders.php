@@ -18,7 +18,7 @@ $stmt->bind_param('i', $member['id']);
 $stmt->execute();
 $orders = $stmt->get_result();
 
-$pill_map = ['placed' => 'processing', 'delivered' => 'completed', 'cancelled' => 'cancelled'];
+$pill_map = ['pending' => 'processing', 'paid' => 'approved', 'delivered' => 'completed', 'cancelled' => 'cancelled'];
 
 $page_title = 'My Orders';
 require __DIR__ . '/../includes/header.php';

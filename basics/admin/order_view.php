@@ -10,7 +10,7 @@ require_basics_admin_login();
 $id = (int) ($_GET['id'] ?? 0);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'deliver') {
-    $stmt = $conn->prepare("UPDATE basics_orders SET status = 'delivered', delivered_at = NOW() WHERE id = ? AND status = 'placed'");
+    $stmt = $conn->prepare("UPDATE basics_orders SET status = 'delivered', delivered_at = NOW() WHERE id = ? AND status = 'paid'");
     $stmt->bind_param('i', $id);
     $stmt->execute();
     $delivered = $stmt->affected_rows > 0;
@@ -25,6 +25,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'deliv
         $member = basics_member_by_order_id($conn, $id);
         if ($member && $due_date) {
             basics_notify($conn, $member, "Hi {$member['full_name']}, your order has been delivered! Please settle your balance by " . date('M j, Y', strtotime($due_date)) . ". - JMC Foodies Basics");
+        }
+    }
+    redirect('/basics/admin/order_view.php?id=' . $id);
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'cancel') {
+    $stmt = $conn->prepare("UPDATE basics_orders SET status = 'cancelled' WHERE id = ? AND status = 'pending'");
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    $cancelled = $stmt->affected_rows > 0;
+    $stmt->close();
+    if ($cancelled) {
+        log_activity($conn, 'cancel_basics_order', 'Cancelled Basics order #' . $id);
+        $member = basics_member_by_order_id($conn, $id);
+        if ($member) {
+            basics_notify($conn, $member, "Hi {$member['full_name']}, your order #{$id} has been cancelled. - JMC Foodies Basics");
         }
     }
     redirect('/basics/admin/order_view.php?id=' . $id);
@@ -78,7 +92,11 @@ require __DIR__ . '/includes/admin_sidebar.php';
         <p class="mb-1">Member: <?= sanitize($order['full_name']) ?> (<?= sanitize($order['username']) ?>)</p>
         <p class="mb-1">Cycle: <?= sanitize($order['cycle_label']) ?></p>
         <p class="mb-1">Payment Due: <?= date('M j, Y', strtotime($order['payment_due_date'])) ?></p>
-        <p class="mb-0">Status: <span class="pill pill-<?= $order['status'] === 'placed' ? 'processing' : ($order['status'] === 'delivered' ? 'completed' : 'cancelled') ?>"><?= sanitize($order['status']) ?></span></p>
+        <?php $pill_map = ['pending' => 'processing', 'paid' => 'approved', 'delivered' => 'completed', 'cancelled' => 'cancelled']; ?>
+        <p class="mb-2">Status: <span class="pill pill-<?= $pill_map[$order['status']] ?? 'pending' ?>"><?= sanitize($order['status']) ?></span></p>
+        <?php if (in_array($order['status'], ['paid', 'delivered'], true)): ?>
+          <a href="<?= BASE_URL ?>/basics/admin/delivery_receipt.php?id=<?= (int) $order['id'] ?>" class="btn-chip btn-chip-outline"><i class="fas fa-receipt"></i> Delivery Receipt</a>
+        <?php endif; ?>
       </div>
 
       <div class="table-responsive">
@@ -104,9 +122,13 @@ require __DIR__ . '/includes/admin_sidebar.php';
         <h2 class="h6">Payment</h2>
         <p class="mb-1">Amount Due: <?= format_price($order['total_amount']) ?></p>
         <p class="mb-3">Amount Paid: <span class="fw-bold"><?= format_price($amount_paid) ?></span></p>
-        <?php if ($order['status'] === 'placed' && $amount_paid < $order['total_amount']): ?>
+        <?php if ($order['status'] === 'pending'): ?>
           <a href="<?= BASE_URL ?>/basics/admin/payments.php?order_id=<?= (int) $order['id'] ?>" class="btn-chip btn-chip-success">Record Payment</a>
-        <?php elseif ($order['status'] === 'placed'): ?>
+          <form method="post" class="d-inline">
+            <input type="hidden" name="action" value="cancel">
+            <button type="submit" class="btn-chip btn-chip-outline" onclick="return confirm('Cancel this order? This cannot be undone.');">Cancel Order</button>
+          </form>
+        <?php elseif ($order['status'] === 'paid'): ?>
           <form method="post">
             <input type="hidden" name="action" value="deliver">
             <button type="submit" class="btn-chip btn-chip-success" onclick="return confirm('Mark this order as delivered?');">Mark Delivered</button>

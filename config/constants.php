@@ -12,13 +12,13 @@ define('SITE_NAME', 'JMC Digital');
  * BASE_URL CONFIGURATION
  * ======================
  * Auto-detects environment:
- *   - Local (localhost / 127.0.0.1) -> '/jmcfoodies' (app runs in a subfolder)
+ *   - Local (localhost / 127.0.0.1) -> '/jmcfoodiespremium' (app runs in a subfolder)
  *   - Live  (deployed at domain root) -> '' (empty string)
  */
 $host_header = $_SERVER['HTTP_HOST'] ?? '';
 $is_local = (strpos($host_header, 'localhost') !== false)
          || (strpos($host_header, '127.0.0.1') !== false);
-define('BASE_URL', $is_local ? '/jmcfoodies' : '');
+define('BASE_URL', $is_local ? '/jmcfoodiespremium' : '');
 
 define('WELLNESS_URL', BASE_URL . '/wellness');
 define('BASICS_URL', BASE_URL . '/basics');

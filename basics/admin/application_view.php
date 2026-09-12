@@ -5,7 +5,7 @@ require __DIR__ . '/../../includes/functions.php';
 require __DIR__ . '/../../includes/auth.php';
 require __DIR__ . '/../includes/functions.php';
 
-require_basics_admin_login();
+require_basics_admin_role(['super_admin', 'staff_orders']);
 
 $id = (int) ($_GET['id'] ?? 0);
 
@@ -28,7 +28,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             log_activity($conn, 'approve_basics_application', 'Approved Basics application for member #' . $id . ' (weekly limit ' . format_price($weekly_limit) . ')');
             $member = basics_get_member($conn, $conn->query("SELECT user_id FROM basics_members WHERE id = $id")->fetch_assoc()['user_id']);
             if ($member) {
-                basics_notify($conn, $member, "Hi {$member['full_name']}, your JMC Foodies Basics membership has been APPROVED! Weekly credit limit: " . format_price($weekly_limit) . ". You can now log in and start ordering. - JMC Foodies Basics");
+                // No password reset on approval — the applicant already
+                // chose their own at signup, so they log in with that.
+                basics_notify($conn, $member, "Hi {$member['full_name']}, your JMC Foodies Basics membership has been APPROVED! Weekly credit limit: " . format_price($weekly_limit) . ". Log in with the username and password you set at signup. - JMC Foodies Basics");
+                send_basics_account_approved_email($member['email'], $member['full_name'], $member['username'], $weekly_limit);
             }
         }
     } elseif ($action === 'deny') {
@@ -42,6 +45,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($denied) {
             log_activity($conn, 'deny_basics_application', 'Denied Basics application for member #' . $id);
+            $member = basics_get_member($conn, $conn->query("SELECT user_id FROM basics_members WHERE id = $id")->fetch_assoc()['user_id']);
+            if ($member) {
+                basics_notify($conn, $member, "Hi {$member['full_name']}, thank you for choosing to apply for the JMC Foodies Basics Program. Unfortunately, we are unable to approve your application at this time, based on your available credit and financial information. However, we would like you to consider applying after 30 days. For questions and other concerns please call +63 917 323 8153. - JMC Foodies Basics");
+                send_basics_account_denied_email($member['email'], $member['full_name']);
+            }
         }
     }
     redirect('/basics/admin/application_view.php?id=' . $id);

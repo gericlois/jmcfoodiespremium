@@ -21,6 +21,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $user = $stmt->get_result()->fetch_assoc();
     $stmt->close();
 
+    // Only a hard "suspended" account is blocked here. A Wellness-side
+    // "pending" account can still log in — a Basics-approved member whose
+    // Wellness application hasn't been reviewed yet needs to reach Basics.
+    // route_after_login() sends them to the right place either way.
     if (!$user || !password_verify($password, $user['password_hash'])) {
         $errors[] = 'Invalid username or password.';
     } elseif ($user['status'] === 'suspended') {

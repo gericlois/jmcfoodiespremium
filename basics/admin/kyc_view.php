@@ -4,7 +4,7 @@ require __DIR__ . '/../../config/database.php';
 require __DIR__ . '/../../includes/functions.php';
 require __DIR__ . '/../../includes/auth.php';
 
-require_basics_admin_login();
+require_basics_admin_role(['super_admin', 'staff_orders']);
 
 $doc_id = (int) ($_GET['doc_id'] ?? 0);
 
@@ -24,6 +24,8 @@ if (!is_file($path)) {
     http_response_code(404);
     exit('File not found on disk.');
 }
+
+send_attachment_cache_headers($path);
 
 $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
 $content_types = ['jpg' => 'image/jpeg', 'png' => 'image/png', 'webp' => 'image/webp', 'pdf' => 'application/pdf'];

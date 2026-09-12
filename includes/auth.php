@@ -157,3 +157,34 @@ function require_basics_admin_login() {
         redirect('/basics/admin/login.php');
     }
 }
+
+function basics_admin_role() {
+    return $_SESSION['basics_admin_role'] ?? 'super_admin';
+}
+
+// Where each role lands after login, and where a permission-denied redirect
+// sends them — must be a page that role can actually open, or a denied
+// staff_payments admin bouncing off a staff_orders-only page (or vice versa)
+// would redirect-loop forever.
+function basics_admin_landing_url() {
+    switch (basics_admin_role()) {
+        case 'staff_orders':
+            return '/basics/admin/applications.php';
+        case 'staff_payments':
+            return '/basics/admin/payments.php';
+        default:
+            return '/basics/admin/index.php';
+    }
+}
+
+// staff_orders and staff_payments are restricted roles, each scoped to its
+// own slice of the admin (orders/applications vs payments/benefits).
+// Everything else (members, settings, etc.) is super_admin-only. Pages call
+// this instead of require_basics_admin_login() when they should be
+// off-limits to one or both staff roles.
+function require_basics_admin_role(array $allowed_roles) {
+    require_basics_admin_login();
+    if (!in_array(basics_admin_role(), $allowed_roles, true)) {
+        redirect(basics_admin_landing_url());
+    }
+}

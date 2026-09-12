@@ -5,7 +5,7 @@ require __DIR__ . '/../../includes/functions.php';
 require __DIR__ . '/../../includes/auth.php';
 require __DIR__ . '/../includes/functions.php';
 
-require_basics_admin_login();
+require_basics_admin_role(['super_admin', 'staff_payments']);
 
 $errors = [];
 
@@ -83,7 +83,7 @@ if ($status_filter !== 'all') {
     $sql .= " WHERE s.status = '" . $conn->real_escape_string($status_filter) . "'";
 }
 $sql .= " ORDER BY s.created_at DESC";
-$submissions = $conn->query($sql);
+$submissions = $conn->query($sql)->fetch_all(MYSQLI_ASSOC);
 
 $pending_count = (int) $conn->query("SELECT COUNT(*) AS c FROM basics_payment_submissions WHERE status = 'pending'")->fetch_assoc()['c'];
 
@@ -124,14 +124,14 @@ require __DIR__ . '/includes/admin_sidebar.php';
 
   <div class="table-responsive">
     <table class="table-theme">
-      <thead><tr><th>Member</th><th>For</th><th>Method</th><th>Sent To</th><th>Amount</th><th>Reference #</th><th>Paid At</th><th>Proof</th><th>Status</th><th></th></tr></thead>
+      <thead><tr><th>Member</th><th>For</th><th>Method</th><th>Sent To</th><th>Amount</th><th>Reference #</th><th>Paid At</th><th class="no-print">Proof</th><th>Status</th><th class="no-print"></th></tr></thead>
       <tbody>
-      <?php if ($submissions->num_rows === 0): ?>
+      <?php if (empty($submissions)): ?>
         <tr><td colspan="10" class="text-muted">No submissions.</td></tr>
       <?php endif; ?>
       <?php $for_labels = ['grocery' => 'Grocery', 'loan' => 'Loan', 'other' => 'Other']; ?>
       <?php $status_pill = ['pending' => 'pending', 'confirmed' => 'approved', 'rejected' => 'rejected']; ?>
-      <?php while ($s = $submissions->fetch_assoc()): ?>
+      <?php foreach ($submissions as $s): ?>
         <tr>
           <td><?= sanitize($s['full_name']) ?> <span class="text-muted small">(<?= sanitize($s['username']) ?>)</span></td>
           <td><?= $for_labels[$s['payment_for']] ?? sanitize($s['payment_for']) ?><?= $s['order_id'] ? ' #' . (int) $s['order_id'] : '' ?><?= $s['loan_request_id'] ? ' #' . (int) $s['loan_request_id'] : '' ?></td>
@@ -140,45 +140,53 @@ require __DIR__ . '/includes/admin_sidebar.php';
           <td><?= format_price($s['amount']) ?></td>
           <td><?= sanitize($s['reference_number']) ?></td>
           <td><?= date('M j, Y g:i A', strtotime($s['paid_at'])) ?></td>
-          <td><?php if ($s['proof_image']): ?><a href="<?= BASE_URL ?>/basics/admin/payment_proof_view.php?id=<?= (int) $s['id'] ?>" target="_blank">View</a><?php else: ?><span class="text-muted">&mdash;</span><?php endif; ?></td>
+          <td class="no-print"><?php if ($s['proof_image']): ?><a href="<?= BASE_URL ?>/basics/admin/payment_proof_view.php?id=<?= (int) $s['id'] ?>" target="_blank">View</a><?php else: ?><span class="text-muted">&mdash;</span><?php endif; ?></td>
           <td><span class="pill pill-<?= $status_pill[$s['status']] ?? 'pending' ?>"><?= ucfirst($s['status']) ?></span></td>
-          <td>
+          <td class="no-print">
             <?php if ($s['status'] === 'pending'): ?>
-              <button type="button" class="btn-chip btn-chip-success" data-bs-toggle="collapse" data-bs-target="#review-<?= (int) $s['id'] ?>">Review</button>
+              <button type="button" class="btn-chip btn-chip-success" data-bs-toggle="modal" data-bs-target="#reviewModal-<?= (int) $s['id'] ?>">Review</button>
             <?php elseif ($s['admin_notes']): ?>
               <span class="small text-muted"><?= sanitize($s['admin_notes']) ?></span>
             <?php endif; ?>
           </td>
         </tr>
-        <?php if ($s['status'] === 'pending'): ?>
-        <tr class="collapse" id="review-<?= (int) $s['id'] ?>">
-          <td colspan="10">
-            <div class="d-flex flex-wrap gap-3 py-2">
-              <form method="post" class="d-flex flex-wrap gap-2 align-items-end">
-                <input type="hidden" name="action" value="confirm">
-                <input type="hidden" name="id" value="<?= (int) $s['id'] ?>">
-                <div>
-                  <label class="flbl">Notes (optional)</label>
-                  <input type="text" name="admin_notes" class="fctrl">
-                </div>
-                <button type="submit" class="btn-red" onclick="return confirm('Confirm this payment?<?= $s['payment_for'] === 'grocery' ? ' This will apply the late-payment penalty tier automatically if applicable.' : '' ?>');"><i class="fas fa-check"></i>Confirm</button>
-              </form>
-              <form method="post" class="d-flex flex-wrap gap-2 align-items-end">
-                <input type="hidden" name="action" value="reject">
-                <input type="hidden" name="id" value="<?= (int) $s['id'] ?>">
-                <div>
-                  <label class="flbl">Reason (required)</label>
-                  <input type="text" name="admin_notes" class="fctrl" required>
-                </div>
-                <button type="submit" class="btn-outline-theme" onclick="return confirm('Reject this submission?');"><i class="fas fa-xmark"></i>Reject</button>
-              </form>
-            </div>
-          </td>
-        </tr>
-        <?php endif; ?>
-      <?php endwhile; ?>
+      <?php endforeach; ?>
       </tbody>
     </table>
   </div>
 </div>
+
+<?php foreach ($submissions as $s): ?>
+  <?php if ($s['status'] !== 'pending') continue; ?>
+  <div class="modal fade" id="reviewModal-<?= (int) $s['id'] ?>" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Review — <?= sanitize($s['full_name']) ?></h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body d-flex flex-column gap-3">
+          <form method="post" class="d-flex flex-wrap gap-2 align-items-end">
+            <input type="hidden" name="action" value="confirm">
+            <input type="hidden" name="id" value="<?= (int) $s['id'] ?>">
+            <div>
+              <label class="flbl">Notes (optional)</label>
+              <input type="text" name="admin_notes" class="fctrl">
+            </div>
+            <button type="submit" class="btn-red" onclick="return confirm('Confirm this payment?<?= $s['payment_for'] === 'grocery' ? ' This will apply the late-payment penalty tier automatically if applicable.' : '' ?>');"><i class="fas fa-check"></i>Confirm</button>
+          </form>
+          <form method="post" class="d-flex flex-wrap gap-2 align-items-end">
+            <input type="hidden" name="action" value="reject">
+            <input type="hidden" name="id" value="<?= (int) $s['id'] ?>">
+            <div>
+              <label class="flbl">Reason (required)</label>
+              <input type="text" name="admin_notes" class="fctrl" required>
+            </div>
+            <button type="submit" class="btn-outline-theme" onclick="return confirm('Reject this submission?');"><i class="fas fa-xmark"></i>Reject</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+<?php endforeach; ?>
 <?php require __DIR__ . '/../../admin/includes/admin_footer.php'; ?>

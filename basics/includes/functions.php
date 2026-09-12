@@ -1,5 +1,5 @@
 <?php
-// JMC Foodies Basics business logic: weekly ordering cycles, revolving
+// JMC Foodies Basics business logic: continuous ordering, revolving
 // credit-line checks, and the tiered late-payment penalty engine.
 
 // Thin wrapper around send_sms() (includes/functions.php) — every Basics
@@ -14,6 +14,43 @@ function basics_notify($conn, $member, $message) {
         return false;
     }
     return send_sms($member['contact_number'] ?? '', $message);
+}
+
+// Sent alongside the existing approval SMS (basics_notify() in
+// basics/admin/application_view.php) when an admin approves a pending
+// membership application — the SMS is a quick heads-up, this carries the
+// actual login instructions. Via send_email() (includes/functions.php,
+// Gmail SMTP). No password reset happens on approval — the applicant logs
+// in with whatever they chose at signup.
+function send_basics_account_approved_email($to_email, $full_name, $username, $weekly_limit) {
+    if (empty($to_email)) {
+        return false;
+    }
+    $subject = 'Your JMC Foodies Basics membership has been approved';
+    $message = "Hi {$full_name},\r\n\r\n"
+        . "Good news! Your JMC Foodies Basics membership application has been reviewed and approved.\r\n\r\n"
+        . 'Weekly Credit Limit: ' . format_price($weekly_limit) . "\r\n\r\n"
+        . "You can now log in and start ordering with the username and password you set at signup:\r\n\r\n"
+        . "Username: {$username}\r\n\r\n"
+        . 'Log in here: ' . BASICS_URL . "/login.php\r\n\r\n"
+        . '— JMC Foodies Basics Team';
+    return send_email($to_email, $subject, $message);
+}
+
+// Sent alongside the existing denial SMS (basics_notify() in
+// basics/admin/application_view.php) when an admin denies a pending
+// membership application. The phone number reminder isn't repeated here —
+// send_email() (includes/functions.php) already appends it to every email.
+function send_basics_account_denied_email($to_email, $full_name) {
+    if (empty($to_email)) {
+        return false;
+    }
+    $subject = 'Your JMC Foodies Basics application status';
+    $message = "Hi {$full_name},\r\n\r\n"
+        . "Thank you for choosing to apply for the JMC Foodies Basics Program.\r\n\r\n"
+        . "Unfortunately, we are unable to approve your application at this time, based on your available credit and financial information. However, we would like you to consider applying again after 30 days.\r\n\r\n"
+        . '— JMC Foodies Basics Team';
+    return send_email($to_email, $subject, $message);
 }
 
 // Looks up the full member row (for basics_notify()) from a basics_orders.id
@@ -37,18 +74,6 @@ function basics_member_by_id($conn, $member_id) {
     return $row ? basics_get_member($conn, $row['user_id']) : null;
 }
 
-// The cycle currently open for placing orders (Mon-Thu window), if any.
-// Always recomputed from today's date against the date columns — a stale
-// `status` cache value can never mis-gate ordering.
-function basics_active_order_cycle($conn) {
-    $today = date('Y-m-d');
-    $stmt = $conn->prepare("SELECT * FROM basics_cycles WHERE order_open_date <= ? AND order_cutoff_date >= ? ORDER BY order_open_date DESC LIMIT 1");
-    $stmt->bind_param('ss', $today, $today);
-    $stmt->execute();
-    $cycle = $stmt->get_result()->fetch_assoc();
-    $stmt->close();
-    return $cycle ?: null;
-}
 
 function basics_get_member($conn, $user_id) {
     $stmt = $conn->prepare("SELECT bm.*, u.full_name, u.username, u.email, u.contact_number
@@ -61,17 +86,27 @@ function basics_get_member($conn, $user_id) {
     return $member ?: null;
 }
 
-// Sum of `placed` orders that don't yet have a payment covering their full
-// amount_due. A revolving ceiling, not a per-cycle reset — a member who
-// hasn't paid down prior weeks simply can't order more.
+// Total quantity across the member's current draft cart — powers the badge
+// on the navbar Cart link (includes/navbar.php).
+function basics_cart_item_count($conn, $user_id) {
+    $stmt = $conn->prepare("SELECT COALESCE(SUM(oi.quantity), 0) AS c
+                             FROM basics_orders o
+                             JOIN basics_order_items oi ON oi.order_id = o.id
+                             JOIN basics_members bm ON bm.id = o.member_id
+                             WHERE bm.user_id = ? AND o.status = 'draft'");
+    $stmt->bind_param('i', $user_id);
+    $stmt->execute();
+    return (int) $stmt->get_result()->fetch_assoc()['c'];
+}
+
+// Sum of `pending` (checked out, not yet fully paid) orders — status flips
+// to 'paid' automatically once payments cover the total, so a plain status
+// filter is enough. A revolving ceiling, not a per-cycle reset — a member
+// who hasn't paid down prior weeks simply can't order more.
 function basics_outstanding_balance($conn, $member_id) {
     $stmt = $conn->prepare("SELECT COALESCE(SUM(o.total_amount), 0) AS outstanding
                              FROM basics_orders o
-                             WHERE o.member_id = ? AND o.status = 'placed'
-                               AND o.id NOT IN (
-                                   SELECT p.order_id FROM basics_payments p
-                                   WHERE p.order_id = o.id AND p.amount_paid >= o.total_amount
-                               )");
+                             WHERE o.member_id = ? AND o.status = 'pending'");
     $stmt->bind_param('i', $member_id);
     $stmt->execute();
     $row = $stmt->get_result()->fetch_assoc();
@@ -149,6 +184,7 @@ function handle_kyc_document_upload($file_key) {
     if (!move_uploaded_file($_FILES[$file_key]['tmp_name'], $dest)) {
         return [null, 'Failed to save uploaded file.'];
     }
+    resize_image_if_needed($dest, $mime);
     return [$new_filename, null];
 }
 
@@ -180,17 +216,17 @@ function handle_payment_proof_upload($file_key) {
     if (!move_uploaded_file($_FILES[$file_key]['tmp_name'], $dest)) {
         return [null, 'Failed to save the proof file.'];
     }
+    resize_image_if_needed($dest, $mime);
     return [$new_filename, null];
 }
 
-// This member's placed orders that aren't fully paid yet — populates the
+// This member's pending orders that aren't fully paid yet — populates the
 // "which order is this for" choice on the Grocery payment submission form.
 function basics_member_awaiting_orders($conn, $member_id) {
-    $stmt = $conn->prepare("SELECT o.*, c.label AS cycle_label,
+    $stmt = $conn->prepare("SELECT o.*,
                                     (SELECT COALESCE(SUM(amount_paid),0) FROM basics_payments p WHERE p.order_id = o.id) AS amount_paid
                              FROM basics_orders o
-                             JOIN basics_cycles c ON c.id = o.cycle_id
-                             WHERE o.member_id = ? AND o.status = 'placed'
+                             WHERE o.member_id = ? AND o.status IN ('confirmed', 'delivered')
                              HAVING amount_paid < o.total_amount
                              ORDER BY o.created_at DESC");
     $stmt->bind_param('i', $member_id);
@@ -198,13 +234,21 @@ function basics_member_awaiting_orders($conn, $member_id) {
     return $stmt->get_result();
 }
 
-// Records a payment against a placed order, applying the late-payment
+// Payment due date is per-order, not per-cycle: 7 days after the order was
+// actually marked delivered. An order that hasn't been delivered yet has no
+// due date at all — there is nothing to be late on until it arrives.
+function basics_payment_due_date($order) {
+    if (empty($order['delivered_at'])) {
+        return null;
+    }
+    return date('Y-m-d', strtotime($order['delivered_at'] . ' +7 days'));
+}
+
+// Records a payment against a pending order, applying the late-payment
 // penalty tier + credit-line/suspension escalation in one transaction.
 // Returns ['is_late' => bool, 'penalty_amount' => float, 'membership_status' => string].
 function basics_record_payment($conn, $order_id, $amount_paid, $paid_at, $admin_id, $notes = null) {
-    $stmt = $conn->prepare("SELECT o.*, c.payment_due_date
-                             FROM basics_orders o JOIN basics_cycles c ON c.id = o.cycle_id
-                             WHERE o.id = ? AND o.status = 'placed' FOR UPDATE");
+    $stmt = $conn->prepare("SELECT * FROM basics_orders WHERE id = ? AND status IN ('confirmed', 'delivered') FOR UPDATE");
     $stmt->bind_param('i', $order_id);
     $stmt->execute();
     $order = $stmt->get_result()->fetch_assoc();
@@ -220,8 +264,9 @@ function basics_record_payment($conn, $order_id, $amount_paid, $paid_at, $admin_
     $member = $stmt->get_result()->fetch_assoc();
     $stmt->close();
 
+    $due_date = basics_payment_due_date($order);
     $paid_date = date('Y-m-d', strtotime($paid_at));
-    $is_late = $paid_date > $order['payment_due_date'];
+    $is_late = $due_date !== null && $paid_date > $due_date;
     $amount_due = (float) $order['total_amount'];
 
     $penalty_rate = 0.0;
@@ -262,6 +307,14 @@ function basics_record_payment($conn, $order_id, $amount_paid, $paid_at, $admin_
         $offense_number, $is_late_int, $paid_at, $admin_id, $notes);
     $stmt->execute();
     $stmt->close();
+
+    $total_paid = (float) $conn->query("SELECT COALESCE(SUM(amount_paid),0) AS s FROM basics_payments WHERE order_id = " . (int) $order_id)->fetch_assoc()['s'];
+    if ($total_paid >= $amount_due) {
+        $stmt = $conn->prepare("UPDATE basics_orders SET status = 'paid' WHERE id = ? AND status = 'confirmed'");
+        $stmt->bind_param('i', $order_id);
+        $stmt->execute();
+        $stmt->close();
+    }
 
     $stmt = $conn->prepare("UPDATE basics_members SET
         offense_count = ?, consecutive_on_time_payments = ?, credit_limit_frozen = ?,
@@ -354,5 +407,6 @@ function handle_benefit_document_upload($file_key) {
     if (!move_uploaded_file($_FILES[$file_key]['tmp_name'], $dest)) {
         return [null, 'Failed to save the uploaded file.'];
     }
+    resize_image_if_needed($dest, $mime);
     return [$new_filename, null];
 }

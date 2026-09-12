@@ -4,13 +4,15 @@ require __DIR__ . '/config/database.php';
 require __DIR__ . '/includes/functions.php';
 require __DIR__ . '/includes/auth.php';
 
-// Wellness and Basics are fully separate logins now — check each session
-// independently and skip the chooser if either is already active.
+// Logged-in visitors skip the chooser entirely if they only have one module.
+// route_after_login() returns '/index.php' itself for dual-access users —
+// redirecting there would just bounce back here again, so only redirect
+// when the target is actually somewhere else.
 if (is_logged_in()) {
-    redirect('/wellness/dashboard.php');
-}
-if (basics_is_logged_in()) {
-    redirect('/basics/dashboard.php');
+    $target = route_after_login($conn, current_user_id());
+    if ($target !== '/index.php') {
+        redirect($target);
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -19,7 +21,6 @@ if (basics_is_logged_in()) {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><?= sanitize(SITE_NAME) ?></title>
-<link rel="icon" type="image/png" sizes="192x192" href="<?= BASE_URL ?>/assets/img/icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -93,7 +94,7 @@ if (basics_is_logged_in()) {
     <div class="card">
       <div class="chooser-header">
         <h1 class="chooser-brand">JMC<br>Digital</h1>
-        <p>Two platforms, two separate logins</p>
+        <p>One login, two ways to save &amp; earn</p>
       </div>
       <div class="card-body p-4">
         <p class="text-center small text-muted mb-3">Choose where you'd like to login / sign in</p>

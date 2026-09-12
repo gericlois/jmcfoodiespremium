@@ -30,6 +30,7 @@ $nav_groups = [
     'System' => [
         '/admin/settings.php' => ['icon' => 'fa-gear', 'label' => 'Settings'],
         '/admin/activity_log.php' => ['icon' => 'fa-clock-rotate-left', 'label' => 'Activity Log'],
+        '/admin/communication_log.php' => ['icon' => 'fa-comments', 'label' => 'Communication Log'],
     ],
 ];
 ?>

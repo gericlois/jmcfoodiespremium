@@ -4,7 +4,7 @@ require __DIR__ . '/../../config/database.php';
 require __DIR__ . '/../../includes/functions.php';
 require __DIR__ . '/../../includes/auth.php';
 
-require_basics_admin_login();
+require_basics_admin_role(['super_admin', 'staff_payments']);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'flag_dormant') {
     $id = (int) ($_POST['id'] ?? 0);

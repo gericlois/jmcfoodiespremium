@@ -5,7 +5,7 @@ require __DIR__ . '/../../includes/functions.php';
 require __DIR__ . '/../../includes/auth.php';
 require __DIR__ . '/../includes/functions.php';
 
-require_basics_admin_login();
+require_basics_admin_role(['super_admin', 'staff_payments']);
 
 $errors = [];
 $type_labels = basics_benefit_type_labels();
@@ -86,7 +86,7 @@ if ($type_filter !== '') {
     $sql .= " AND r.benefit_type = '" . $conn->real_escape_string($type_filter) . "'";
 }
 $sql .= " ORDER BY r.created_at DESC";
-$requests = $conn->query($sql);
+$requests = $conn->query($sql)->fetch_all(MYSQLI_ASSOC);
 
 $pending_count = (int) $conn->query("SELECT COUNT(*) AS c FROM basics_benefit_requests WHERE status = 'pending'")->fetch_assoc()['c'];
 
@@ -135,13 +135,13 @@ require __DIR__ . '/includes/admin_sidebar.php';
   <div class="panel-card">
     <div class="table-responsive">
       <table class="table-theme">
-        <thead><tr><th>Member</th><th>Program</th><th>Amount Due</th><th>Amount Paid</th><th>Due Date</th><th>Documents</th><th>Status</th><th></th></tr></thead>
+        <thead><tr><th>Member</th><th>Program</th><th>Amount Due</th><th>Amount Paid</th><th>Due Date</th><th class="no-print">Documents</th><th>Status</th><th class="no-print"></th></tr></thead>
         <tbody>
-        <?php if ($requests->num_rows === 0): ?>
+        <?php if (empty($requests)): ?>
           <tr><td colspan="8" class="text-muted">No requests.</td></tr>
         <?php endif; ?>
         <?php $status_pill = ['pending' => 'pending', 'approved' => 'approved', 'denied' => 'rejected']; ?>
-        <?php while ($r = $requests->fetch_assoc()): ?>
+        <?php foreach ($requests as $r): ?>
           <?php
             $doc_stmt = $conn->prepare("SELECT id, doc_type FROM basics_benefit_documents WHERE request_id = ?");
             $doc_stmt->bind_param('i', $r['id']);
@@ -167,46 +167,54 @@ require __DIR__ . '/includes/admin_sidebar.php';
             <td><span class="pill pill-<?= $status_pill[$r['status']] ?? 'pending' ?>"><?= ucfirst($r['status']) ?></span></td>
             <td class="no-print">
               <?php if ($r['status'] === 'pending'): ?>
-                <button type="button" class="btn-chip btn-chip-success" data-bs-toggle="collapse" data-bs-target="#review-<?= (int) $r['id'] ?>">Review</button>
+                <button type="button" class="btn-chip btn-chip-success" data-bs-toggle="modal" data-bs-target="#reviewModal-<?= (int) $r['id'] ?>">Review</button>
               <?php elseif ($r['admin_notes']): ?>
                 <span class="small text-muted"><?= sanitize($r['admin_notes']) ?></span>
               <?php endif; ?>
             </td>
           </tr>
-          <?php if ($r['status'] === 'pending'): ?>
-          <tr class="collapse" id="review-<?= (int) $r['id'] ?>">
-            <td colspan="8">
-              <div class="d-flex flex-wrap gap-3 py-2">
-                <form method="post" class="d-flex flex-wrap gap-2 align-items-end">
-                  <input type="hidden" name="action" value="approve">
-                  <input type="hidden" name="id" value="<?= (int) $r['id'] ?>">
-                  <div>
-                    <label class="flbl">Amount to Pay Out</label>
-                    <input type="number" step="0.01" min="0.01" name="amount_paid" class="fctrl" value="<?= sanitize($r['amount_due']) ?>" style="width:140px;">
-                  </div>
-                  <div>
-                    <label class="flbl">Notes (optional)</label>
-                    <input type="text" name="admin_notes" class="fctrl">
-                  </div>
-                  <button type="submit" class="btn-red" onclick="return confirm('Approve and mark this benefit as paid out?');"><i class="fas fa-check"></i>Approve</button>
-                </form>
-                <form method="post" class="d-flex flex-wrap gap-2 align-items-end">
-                  <input type="hidden" name="action" value="deny">
-                  <input type="hidden" name="id" value="<?= (int) $r['id'] ?>">
-                  <div>
-                    <label class="flbl">Reason (required)</label>
-                    <input type="text" name="admin_notes" class="fctrl" required>
-                  </div>
-                  <button type="submit" class="btn-outline-theme" onclick="return confirm('Deny this request?');"><i class="fas fa-xmark"></i>Deny</button>
-                </form>
-              </div>
-            </td>
-          </tr>
-          <?php endif; ?>
-        <?php endwhile; ?>
+        <?php endforeach; ?>
         </tbody>
       </table>
     </div>
   </div>
 </div>
+
+<?php foreach ($requests as $r): ?>
+  <?php if ($r['status'] !== 'pending') continue; ?>
+  <div class="modal fade" id="reviewModal-<?= (int) $r['id'] ?>" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Review — <?= sanitize($r['full_name']) ?></h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body d-flex flex-column gap-3">
+          <form method="post" class="d-flex flex-wrap gap-2 align-items-end">
+            <input type="hidden" name="action" value="approve">
+            <input type="hidden" name="id" value="<?= (int) $r['id'] ?>">
+            <div>
+              <label class="flbl">Amount to Pay Out</label>
+              <input type="number" step="0.01" min="0.01" name="amount_paid" class="fctrl" value="<?= sanitize($r['amount_due']) ?>" style="width:140px;">
+            </div>
+            <div>
+              <label class="flbl">Notes (optional)</label>
+              <input type="text" name="admin_notes" class="fctrl">
+            </div>
+            <button type="submit" class="btn-red" onclick="return confirm('Approve and mark this benefit as paid out?');"><i class="fas fa-check"></i>Approve</button>
+          </form>
+          <form method="post" class="d-flex flex-wrap gap-2 align-items-end">
+            <input type="hidden" name="action" value="deny">
+            <input type="hidden" name="id" value="<?= (int) $r['id'] ?>">
+            <div>
+              <label class="flbl">Reason (required)</label>
+              <input type="text" name="admin_notes" class="fctrl" required>
+            </div>
+            <button type="submit" class="btn-outline-theme" onclick="return confirm('Deny this request?');"><i class="fas fa-xmark"></i>Deny</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+<?php endforeach; ?>
 <?php require __DIR__ . '/../../admin/includes/admin_footer.php'; ?>

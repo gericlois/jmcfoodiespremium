@@ -5,7 +5,7 @@ require __DIR__ . '/../../includes/functions.php';
 require __DIR__ . '/../../includes/auth.php';
 require __DIR__ . '/../includes/functions.php';
 
-require_basics_admin_login();
+require_basics_admin_role(['super_admin', 'staff_payments']);
 
 $errors = [];
 
@@ -32,17 +32,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'recor
 
 $order_id_prefill = (int) ($_GET['order_id'] ?? 0);
 
-$stmt = $conn->prepare("SELECT o.*, u.full_name, u.username, c.label AS cycle_label, c.payment_due_date,
+$stmt = $conn->prepare("SELECT o.*, u.full_name, u.username,
                                 (SELECT COALESCE(SUM(amount_paid),0) FROM basics_payments p WHERE p.order_id = o.id) AS amount_paid
                          FROM basics_orders o
                          JOIN basics_members bm ON bm.id = o.member_id
                          JOIN basics_users u ON u.id = bm.user_id
-                         JOIN basics_cycles c ON c.id = o.cycle_id
-                         WHERE o.status = 'placed'
+                         WHERE o.status IN ('confirmed', 'delivered')
                          HAVING amount_paid < o.total_amount
-                         ORDER BY c.payment_due_date ASC");
+                         ORDER BY (o.delivered_at IS NULL), o.delivered_at ASC");
 $stmt->execute();
-$awaiting = $stmt->get_result();
+$awaiting = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
 $page_title = 'Record Payment';
 require __DIR__ . '/../../admin/includes/admin_header.php';
@@ -67,49 +66,78 @@ require __DIR__ . '/includes/admin_sidebar.php';
 
   <div class="table-responsive">
     <table class="table-theme">
-      <thead><tr><th>Order #</th><th>Member</th><th>Cycle</th><th>Due</th><th>Amount Due</th><th>Already Paid</th><th>Payment Due Date</th><th></th></tr></thead>
+      <thead><tr><th>Order #</th><th>Member</th><th>Due</th><th>Amount Due</th><th>Already Paid</th><th>Payment Due Date</th><th></th></tr></thead>
       <tbody>
-      <?php if ($awaiting->num_rows === 0): ?>
-        <tr><td colspan="8" class="text-muted">No orders currently awaiting payment.</td></tr>
+      <?php if (empty($awaiting)): ?>
+        <tr><td colspan="7" class="text-muted">No orders currently awaiting payment.</td></tr>
       <?php endif; ?>
-      <?php while ($o = $awaiting->fetch_assoc()): ?>
-        <?php $remaining = $o['total_amount'] - $o['amount_paid']; $is_expanded = $order_id_prefill === (int) $o['id']; ?>
+      <?php foreach ($awaiting as $o): ?>
+        <?php $remaining = $o['total_amount'] - $o['amount_paid']; ?>
         <tr>
           <td>#<?= (int) $o['id'] ?></td>
           <td><?= sanitize($o['full_name']) ?> <span class="text-muted small">(<?= sanitize($o['username']) ?>)</span></td>
-          <td><?= sanitize($o['cycle_label']) ?></td>
           <td><?= format_price($remaining) ?></td>
           <td><?= format_price($o['total_amount']) ?></td>
           <td><?= format_price($o['amount_paid']) ?></td>
-          <td><?= date('M j, Y', strtotime($o['payment_due_date'])) ?><?= date('Y-m-d') > $o['payment_due_date'] ? ' <span class="pill pill-rejected">Overdue</span>' : '' ?></td>
+          <?php $due_date = basics_payment_due_date($o); ?>
           <td>
-            <button type="button" class="btn-chip btn-chip-success" data-bs-toggle="collapse" data-bs-target="#pay-<?= (int) $o['id'] ?>">Record Payment</button>
+            <?php if ($due_date === null): ?>
+              <span class="text-muted">Due 7 days after delivery</span>
+            <?php else: ?>
+              <?= date('M j, Y', strtotime($due_date)) ?><?= date('Y-m-d') > $due_date ? ' <span class="pill pill-rejected">Overdue</span>' : '' ?>
+            <?php endif; ?>
+          </td>
+          <td class="no-print">
+            <button type="button" class="btn-chip btn-chip-success" data-bs-toggle="modal" data-bs-target="#payModal-<?= (int) $o['id'] ?>">Record Payment</button>
           </td>
         </tr>
-        <tr class="collapse <?= $is_expanded ? 'show' : '' ?>" id="pay-<?= (int) $o['id'] ?>">
-          <td colspan="8">
-            <form method="post" class="d-flex flex-wrap gap-2 align-items-end py-2">
-              <input type="hidden" name="action" value="record_payment">
-              <input type="hidden" name="order_id" value="<?= (int) $o['id'] ?>">
-              <div>
-                <label class="flbl">Amount Paid</label>
-                <input type="number" step="0.01" min="0.01" name="amount_paid" class="fctrl" value="<?= sanitize($remaining) ?>" required style="width:140px;">
-              </div>
-              <div>
-                <label class="flbl">Date/Time Paid</label>
-                <input type="datetime-local" name="paid_at" class="fctrl" value="<?= date('Y-m-d\TH:i') ?>" required>
-              </div>
-              <div class="flex-grow-1">
-                <label class="flbl">Notes (optional)</label>
-                <input type="text" name="notes" class="fctrl">
-              </div>
-              <button type="submit" class="btn-red" onclick="return confirm('Record this payment? A late payment will apply the penalty tier automatically.');"><i class="fas fa-check"></i>Confirm</button>
-            </form>
-          </td>
-        </tr>
-      <?php endwhile; ?>
+      <?php endforeach; ?>
       </tbody>
     </table>
   </div>
 </div>
+
+<?php foreach ($awaiting as $o): ?>
+  <?php $remaining = $o['total_amount'] - $o['amount_paid']; ?>
+  <div class="modal fade" id="payModal-<?= (int) $o['id'] ?>" tabindex="-1" aria-hidden="true" <?= $order_id_prefill === (int) $o['id'] ? 'data-autoshow="1"' : '' ?>>
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <form method="post">
+          <div class="modal-header">
+            <h5 class="modal-title">Record Payment — Order #<?= (int) $o['id'] ?></h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <input type="hidden" name="action" value="record_payment">
+            <input type="hidden" name="order_id" value="<?= (int) $o['id'] ?>">
+            <div class="mb-2">
+              <label class="flbl">Amount Paid</label>
+              <input type="number" step="0.01" min="0.01" name="amount_paid" class="fctrl" value="<?= sanitize($remaining) ?>" required>
+            </div>
+            <div class="mb-2">
+              <label class="flbl">Date/Time Paid</label>
+              <input type="datetime-local" name="paid_at" class="fctrl" value="<?= date('Y-m-d\TH:i') ?>" required>
+            </div>
+            <div class="mb-0">
+              <label class="flbl">Notes (optional)</label>
+              <input type="text" name="notes" class="fctrl">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="submit" class="btn-red" onclick="return confirm('Record this payment? A late payment will apply the penalty tier automatically.');"><i class="fas fa-check"></i>Confirm</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+<?php endforeach; ?>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var autoshow = document.querySelector('.modal[data-autoshow="1"]');
+  if (autoshow) {
+    new bootstrap.Modal(autoshow).show();
+  }
+});
+</script>
 <?php require __DIR__ . '/../../admin/includes/admin_footer.php'; ?>

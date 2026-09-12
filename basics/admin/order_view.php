@@ -5,36 +5,73 @@ require __DIR__ . '/../../includes/functions.php';
 require __DIR__ . '/../../includes/auth.php';
 require __DIR__ . '/../includes/functions.php';
 
-require_basics_admin_login();
+require_basics_admin_role(['super_admin', 'staff_orders']);
 
 $id = (int) ($_GET['id'] ?? 0);
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'deliver') {
-    $stmt = $conn->prepare("UPDATE basics_orders SET status = 'delivered', delivered_at = NOW() WHERE id = ? AND status = 'placed'");
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confirm') {
+    $stmt = $conn->prepare("UPDATE basics_orders SET status = 'confirmed', confirmed_at = NOW() WHERE id = ? AND status = 'pending'");
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    $confirmed = $stmt->affected_rows > 0;
+    $stmt->close();
+    if ($confirmed) {
+        log_activity($conn, 'confirm_basics_order', 'Approved Basics order #' . $id);
+        $member = basics_member_by_order_id($conn, $id);
+        if ($member) {
+            basics_notify($conn, $member, "Hi {$member['full_name']}, your order #{$id} has been approved and is being prepared. - JMC Foodies Basics");
+        }
+    }
+    redirect('/basics/admin/order_view.php?id=' . $id);
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'deliver') {
+    // Delivery no longer waits on payment — members get their groceries on
+    // schedule regardless, and settle by the (much later) payment due date.
+    $stmt = $conn->prepare("UPDATE basics_orders SET status = 'delivered', delivered_at = NOW() WHERE id = ? AND status IN ('confirmed', 'paid')");
     $stmt->bind_param('i', $id);
     $stmt->execute();
     $delivered = $stmt->affected_rows > 0;
     $stmt->close();
     if ($delivered) {
         log_activity($conn, 'deliver_basics_order', 'Marked Basics order #' . $id . ' as delivered');
-        $stmt = $conn->prepare("SELECT payment_due_date FROM basics_orders o JOIN basics_cycles c ON c.id = o.cycle_id WHERE o.id = ?");
-        $stmt->bind_param('i', $id);
-        $stmt->execute();
-        $due_date = $stmt->get_result()->fetch_assoc()['payment_due_date'] ?? null;
-        $stmt->close();
+        $due_date = date('Y-m-d', strtotime('+7 days'));
         $member = basics_member_by_order_id($conn, $id);
-        if ($member && $due_date) {
+        if ($member) {
             basics_notify($conn, $member, "Hi {$member['full_name']}, your order has been delivered! Please settle your balance by " . date('M j, Y', strtotime($due_date)) . ". - JMC Foodies Basics");
         }
     }
     redirect('/basics/admin/order_view.php?id=' . $id);
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'cancel') {
+    $stmt = $conn->prepare("UPDATE basics_orders SET status = 'cancelled' WHERE id = ? AND status IN ('pending', 'confirmed')");
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    $cancelled = $stmt->affected_rows > 0;
+    $stmt->close();
+    if ($cancelled) {
+        log_activity($conn, 'cancel_basics_order', 'Cancelled Basics order #' . $id);
+        $member = basics_member_by_order_id($conn, $id);
+        if ($member) {
+            basics_notify($conn, $member, "Hi {$member['full_name']}, your order #{$id} has been cancelled. - JMC Foodies Basics");
+        }
+    }
+    redirect('/basics/admin/order_view.php?id=' . $id);
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'archive') {
+    $stmt = $conn->prepare("UPDATE basics_orders SET archived_at = NOW() WHERE id = ? AND status IN ('delivered', 'cancelled')");
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    $stmt->close();
+    redirect('/basics/admin/order_view.php?id=' . $id);
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'unarchive') {
+    $stmt = $conn->prepare("UPDATE basics_orders SET archived_at = NULL WHERE id = ?");
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    $stmt->close();
+    redirect('/basics/admin/order_view.php?id=' . $id);
 }
 
-$stmt = $conn->prepare("SELECT o.*, u.full_name, u.username, c.label AS cycle_label, c.payment_due_date
+$stmt = $conn->prepare("SELECT o.*, u.full_name, u.username
                          FROM basics_orders o
                          JOIN basics_members bm ON bm.id = o.member_id
                          JOIN basics_users u ON u.id = bm.user_id
-                         JOIN basics_cycles c ON c.id = o.cycle_id
                          WHERE o.id = ?");
 $stmt->bind_param('i', $id);
 $stmt->execute();
@@ -44,6 +81,8 @@ $stmt->close();
 if (!$order) {
     redirect('/basics/admin/orders.php');
 }
+
+$payment_due_date = basics_payment_due_date($order);
 
 $stmt = $conn->prepare("SELECT oi.*, p.name, p.sku, p.unit FROM basics_order_items oi
                          JOIN basics_products p ON p.id = oi.product_id
@@ -76,13 +115,29 @@ require __DIR__ . '/includes/admin_sidebar.php';
       <div class="panel-card mb-4">
         <h2 class="h6">Order Details</h2>
         <p class="mb-1">Member: <?= sanitize($order['full_name']) ?> (<?= sanitize($order['username']) ?>)</p>
-        <p class="mb-1">Cycle: <?= sanitize($order['cycle_label']) ?></p>
-        <p class="mb-1">Payment Due: <?= date('M j, Y', strtotime($order['payment_due_date'])) ?></p>
-        <p class="mb-0">Status: <span class="pill pill-<?= $order['status'] === 'placed' ? 'processing' : ($order['status'] === 'delivered' ? 'completed' : 'cancelled') ?>"><?= sanitize($order['status']) ?></span></p>
+        <?php if ($order['delivered_at']): ?>
+          <p class="mb-1">Delivered: <?= date('M j, Y', strtotime($order['delivered_at'])) ?></p>
+          <p class="mb-1">Payment Due: <?= date('M j, Y', strtotime($payment_due_date)) ?></p>
+        <?php else: ?>
+          <p class="mb-1 text-muted">Payment Due: 7 days after delivery</p>
+        <?php endif; ?>
+        <?php $pill_map = ['pending' => 'processing', 'confirmed' => 'approved', 'paid' => 'approved', 'delivered' => 'completed', 'cancelled' => 'cancelled']; ?>
+        <p class="mb-2">Status: <span class="pill pill-<?= $pill_map[$order['status']] ?? 'pending' ?>"><?= sanitize($order['status']) ?></span></p>
+        <?php if (in_array($order['status'], ['paid', 'delivered'], true)): ?>
+          <a href="<?= BASE_URL ?>/basics/admin/delivery_receipt.php?id=<?= (int) $order['id'] ?>" class="btn-chip btn-chip-outline"><i class="fas fa-receipt"></i> Delivery Receipt</a>
+        <?php endif; ?>
+        <?php if (in_array($order['status'], ['delivered', 'cancelled'], true)): ?>
+          <form method="post" class="d-inline">
+            <input type="hidden" name="action" value="<?= $order['archived_at'] ? 'unarchive' : 'archive' ?>">
+            <button type="submit" class="btn-chip btn-chip-outline" <?= $order['archived_at'] ? '' : 'onclick="return confirm(\'Archive this order? It will be hidden from the active list.\');"' ?>>
+              <i class="fas fa-box-archive"></i> <?= $order['archived_at'] ? 'Unarchive' : 'Archive' ?>
+            </button>
+          </form>
+        <?php endif; ?>
       </div>
 
       <div class="table-responsive">
-        <table class="table-theme">
+        <table class="table-theme no-datatable">
           <thead><tr><th>Product</th><th>Qty</th><th>Unit Price</th><th>Line Total</th></tr></thead>
           <tbody>
           <?php while ($item = $items->fetch_assoc()): ?>
@@ -104,13 +159,32 @@ require __DIR__ . '/includes/admin_sidebar.php';
         <h2 class="h6">Payment</h2>
         <p class="mb-1">Amount Due: <?= format_price($order['total_amount']) ?></p>
         <p class="mb-3">Amount Paid: <span class="fw-bold"><?= format_price($amount_paid) ?></span></p>
-        <?php if ($order['status'] === 'placed' && $amount_paid < $order['total_amount']): ?>
-          <a href="<?= BASE_URL ?>/basics/admin/payments.php?order_id=<?= (int) $order['id'] ?>" class="btn-chip btn-chip-success">Record Payment</a>
-        <?php elseif ($order['status'] === 'placed'): ?>
+        <?php if ($order['status'] === 'pending'): ?>
+          <form method="post" class="d-inline">
+            <input type="hidden" name="action" value="confirm">
+            <button type="submit" class="btn-chip btn-chip-success" onclick="return confirm('Approve this order?');">Approve Order</button>
+          </form>
+          <form method="post" class="d-inline">
+            <input type="hidden" name="action" value="cancel">
+            <button type="submit" class="btn-chip btn-chip-outline" onclick="return confirm('Cancel this order? This cannot be undone.');">Cancel Order</button>
+          </form>
+        <?php elseif ($order['status'] === 'confirmed'): ?>
+          <form method="post" class="d-inline">
+            <input type="hidden" name="action" value="deliver">
+            <button type="submit" class="btn-chip btn-chip-success" onclick="return confirm('Mark this order as delivered? Payment can still be recorded later.');">Mark Delivered</button>
+          </form>
+          <a href="<?= BASE_URL ?>/basics/admin/payments.php?order_id=<?= (int) $order['id'] ?>" class="btn-chip btn-chip-outline">Record Payment</a>
+          <form method="post" class="d-inline">
+            <input type="hidden" name="action" value="cancel">
+            <button type="submit" class="btn-chip btn-chip-outline" onclick="return confirm('Cancel this order? This cannot be undone.');">Cancel Order</button>
+          </form>
+        <?php elseif ($order['status'] === 'paid'): ?>
           <form method="post">
             <input type="hidden" name="action" value="deliver">
             <button type="submit" class="btn-chip btn-chip-success" onclick="return confirm('Mark this order as delivered?');">Mark Delivered</button>
           </form>
+        <?php elseif ($order['status'] === 'delivered' && $amount_paid < $order['total_amount']): ?>
+          <a href="<?= BASE_URL ?>/basics/admin/payments.php?order_id=<?= (int) $order['id'] ?>" class="btn-chip btn-chip-success">Record Payment</a>
         <?php endif; ?>
       </div>
 

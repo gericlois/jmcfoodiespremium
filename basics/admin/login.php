@@ -5,7 +5,7 @@ require __DIR__ . '/../../includes/functions.php';
 require __DIR__ . '/../../includes/auth.php';
 
 if (basics_is_admin_logged_in()) {
-    redirect('/basics/admin/index.php');
+    redirect(basics_admin_landing_url());
 }
 
 $errors = [];
@@ -26,7 +26,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $_SESSION['basics_admin_id'] = $admin['id'];
         $_SESSION['basics_admin_name'] = $admin['name'];
-        redirect('/basics/admin/index.php');
+        $_SESSION['basics_admin_role'] = $admin['role'];
+        redirect(basics_admin_landing_url());
     }
 }
 

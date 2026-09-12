@@ -7,6 +7,8 @@ require __DIR__ . '/../includes/auth.php';
 require_admin_login();
 
 $id = (int) ($_GET['id'] ?? 0);
+$email_errors = [];
+$sms_errors = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'toggle_status') {
     update_user_status($conn, $id, $_POST['new_status'] ?? '');
@@ -22,6 +24,52 @@ $stmt->close();
 
 if (!$user) {
     redirect('/admin/users.php');
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'send_email') {
+    $email_subject = trim($_POST['email_subject'] ?? '');
+    $email_message = trim($_POST['email_message'] ?? '');
+
+    if (empty($user['email'])) {
+        $email_errors[] = 'This member has no email address on file.';
+    }
+    if ($email_subject === '') {
+        $email_errors[] = 'Enter a subject.';
+    }
+    if ($email_message === '') {
+        $email_errors[] = 'Enter a message.';
+    }
+
+    if (empty($email_errors)) {
+        if (send_email($user['email'], $email_subject, "Hi {$user['full_name']},\r\n\r\n{$email_message}\r\n\r\n— JMC Foodies Wellness Team")) {
+            log_activity($conn, 'send_wellness_user_email', 'Emailed Wellness user "' . $user['full_name'] . '" (subject: ' . $email_subject . ')');
+            redirect('/admin/user_view.php?id=' . $id . '&email_sent=1');
+        } else {
+            $email_errors[] = 'Failed to send — check the Gmail SMTP configuration (config/email.php).';
+        }
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'send_sms') {
+    $sms_message = trim($_POST['sms_message'] ?? '');
+
+    if (empty($user['contact_number'])) {
+        $sms_errors[] = 'This member has no contact number on file.';
+    }
+    if ($sms_message === '') {
+        $sms_errors[] = 'Enter a message.';
+    } elseif (strlen($sms_message) > 480) {
+        $sms_errors[] = 'Message is too long (max 480 characters, about 3 SMS segments).';
+    }
+
+    if (empty($sms_errors)) {
+        if (send_sms($user['contact_number'], $sms_message)) {
+            log_activity($conn, 'send_wellness_user_sms', 'Texted Wellness user "' . $user['full_name'] . '"');
+            redirect('/admin/user_view.php?id=' . $id . '&sms_sent=1');
+        } else {
+            $sms_errors[] = 'Failed to send — check the Semaphore SMS configuration (config/sms.php).';
+        }
+    }
 }
 
 $total_rebates = wallet_sum_by_type($conn, $id, 'personal_rebate');
@@ -70,6 +118,23 @@ require __DIR__ . '/includes/admin_sidebar.php';
     </div>
   </div>
 
+  <?php if (isset($_GET['email_sent'])): ?>
+    <div class="sucmsg is-visible mb-4"><p>Email sent to <?= sanitize($user['email']) ?>.</p></div>
+  <?php endif; ?>
+  <?php if (isset($_GET['sms_sent'])): ?>
+    <div class="sucmsg is-visible mb-4"><p>Text sent to <?= sanitize($user['contact_number']) ?>.</p></div>
+  <?php endif; ?>
+  <?php if ($email_errors): ?>
+    <div class="errmsg mb-4">
+      <ul class="mb-0"><?php foreach ($email_errors as $error): ?><li><?= sanitize($error) ?></li><?php endforeach; ?></ul>
+    </div>
+  <?php endif; ?>
+  <?php if ($sms_errors): ?>
+    <div class="errmsg mb-4">
+      <ul class="mb-0"><?php foreach ($sms_errors as $error): ?><li><?= sanitize($error) ?></li><?php endforeach; ?></ul>
+    </div>
+  <?php endif; ?>
+
   <div class="row g-4 mb-4">
     <div class="col-12 col-md-6">
       <div class="panel-card">
@@ -104,6 +169,43 @@ require __DIR__ . '/includes/admin_sidebar.php';
             <input type="hidden" name="action" value="toggle_status">
             <input type="hidden" name="new_status" value="active">
             <button type="submit" class="btn-chip btn-chip-success" onclick="return confirm('Reinstate this user?');">Reinstate Account</button>
+          </form>
+        <?php endif; ?>
+      </div>
+
+      <div class="panel-card mt-4">
+        <h2 class="h6">Send Email</h2>
+        <?php if (empty($user['email'])): ?>
+          <p class="text-muted small mb-0">This member has no email address on file.</p>
+        <?php else: ?>
+          <form method="post">
+            <input type="hidden" name="action" value="send_email">
+            <div class="mb-2">
+              <label class="flbl">Subject</label>
+              <input type="text" name="email_subject" class="fctrl" required>
+            </div>
+            <div class="mb-2">
+              <label class="flbl">Message</label>
+              <textarea name="email_message" class="fctrl" rows="4" required></textarea>
+            </div>
+            <button type="submit" class="btn-chip btn-chip-success" onclick="return confirm('Send this email to <?= sanitize($user['email']) ?>?');"><i class="fas fa-paper-plane"></i> Send Email</button>
+          </form>
+        <?php endif; ?>
+      </div>
+
+      <div class="panel-card mt-4">
+        <h2 class="h6">Send SMS</h2>
+        <?php if (empty($user['contact_number'])): ?>
+          <p class="text-muted small mb-0">This member has no contact number on file.</p>
+        <?php else: ?>
+          <form method="post">
+            <input type="hidden" name="action" value="send_sms">
+            <div class="mb-2">
+              <label class="flbl">Message</label>
+              <textarea name="sms_message" class="fctrl" rows="3" maxlength="480" required></textarea>
+              <div class="form-text">Max 480 characters (~3 SMS segments).</div>
+            </div>
+            <button type="submit" class="btn-chip btn-chip-success" onclick="return confirm('Send this SMS to <?= sanitize($user['contact_number']) ?>? This will use real SMS credits.');"><i class="fas fa-comment-sms"></i> Send SMS</button>
           </form>
         <?php endif; ?>
       </div>

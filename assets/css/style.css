@@ -206,6 +206,19 @@
   box-shadow: 0 14px 34px color-mix(in srgb, var(--primary) 45%, transparent);
 }
 
+/* Basics navbar Cart item-count badge (includes/navbar.php) */
+.nav-cart-badge {
+  display: inline-block;
+  background: #fff;
+  color: var(--primary);
+  font-size: 0.68rem;
+  font-weight: 700;
+  border-radius: 30px;
+  padding: 1px 7px;
+  margin-left: 6px;
+  line-height: 1.5;
+}
+
 /* Secondary/outline button to pair with .btn-red */
 .btn-outline-theme {
   display: inline-flex;
@@ -479,6 +492,49 @@
 .btn-chip-outline { background: #fff; color: var(--dark); border: 2px solid #eee; }
 .btn-chip-outline:hover { border-color: var(--primary); color: var(--primary); }
 
+/* Quantity +/- stepper (catalog product cards, cart line items) */
+.qty-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.qty-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 2px solid #eee;
+  border-radius: 50%;
+  background: #fff;
+  color: var(--dark);
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition: 0.2s;
+}
+.qty-btn:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+.qty-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.qty-value {
+  min-width: 1.4em;
+  text-align: center;
+  font-weight: 600;
+}
+.qty-value-input {
+  width: 32px;
+  border: none;
+  text-align: center;
+  font-weight: 600;
+  font-family: inherit;
+  background: transparent;
+  -moz-appearance: textfield;
+}
+.qty-value-input::-webkit-outer-spin-button,
+.qty-value-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
 /* Simple filter/tab pills reused on admin list pages */
 .filter-pill {
   display: inline-block;
@@ -666,7 +722,11 @@ footer {
   .btn-outline-theme,
   .filter-pill,
   img,
-  i.fas, i.far, i.fab {
+  i.fas, i.far, i.fab,
+  .dataTables_filter,
+  .dataTables_length,
+  .dataTables_paginate,
+  .dt-buttons {
     display: none !important;
   }
   .admin-shell {
@@ -676,7 +736,7 @@ footer {
     background: #fff !important;
   }
   .table-theme {
-    font-size: 11px;
+    font-size: 9px;
     background: none !important;
     border-radius: 0 !important;
     box-shadow: none !important;
@@ -685,10 +745,14 @@ footer {
     background: none !important;
     color: #000 !important;
     border-bottom: 1px solid #000 !important;
+    padding: 4px 6px !important;
+    font-size: 9px !important;
   }
   .table-theme tbody td {
     color: #000 !important;
     border-bottom: 1px solid #ccc !important;
+    padding: 3px 6px !important;
+    font-size: 9px !important;
   }
   .table-theme tbody tr:hover {
     background: none !important;
@@ -701,4 +765,48 @@ footer {
     color: #000 !important;
     font-weight: 400 !important;
   }
+  .panel-card {
+    padding: 10px !important;
+    box-shadow: none !important;
+  }
+  .admin-content h1,
+  .admin-content h2 {
+    font-size: 13px !important;
+  }
+  .admin-content p {
+    font-size: 10px !important;
+    margin-bottom: 2px !important;
+  }
+}
+
+/* DataTables (Basics admin tables — search/sort/print). Light polish so the
+   library's default chrome matches the rest of the admin UI. */
+.dataTables_wrapper .dataTables_filter input {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 6px 12px;
+  margin-left: 6px;
+}
+.dataTables_wrapper .dataTables_length select {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 4px 8px;
+  margin: 0 4px;
+}
+.dataTables_wrapper .dataTables_info {
+  font-size: 0.85rem;
+  color: #777;
+}
+.dataTables_wrapper .dataTables_paginate .paginate_button {
+  border-radius: 6px !important;
+  padding: 4px 10px !important;
+  margin-left: 2px;
+}
+.dataTables_wrapper .dataTables_paginate .paginate_button.current {
+  background: var(--primary) !important;
+  border-color: var(--primary) !important;
+  color: #fff !important;
+}
+table.dataTable thead th {
+  cursor: pointer;
 }

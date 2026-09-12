@@ -4,7 +4,7 @@ require __DIR__ . '/../../config/database.php';
 require __DIR__ . '/../../includes/functions.php';
 require __DIR__ . '/../../includes/auth.php';
 
-require_basics_admin_login();
+require_basics_admin_role(['super_admin', 'staff_orders']);
 
 $id = (int) ($_GET['id'] ?? 0);
 $product = [
@@ -19,7 +19,7 @@ if ($id) {
 }
 
 $errors = [];
-$valid_categories = ['Rice', 'Food Essentials', 'Cooking Products', 'Beverages', 'Homecare', 'Personal Care'];
+$valid_categories = ['Rice', 'Food Essentials', 'Cooking Products', 'Beverages', 'Homecare', 'Personal Care', 'Palengke Items', 'Frozen Meat Products', 'Bread & Snacks'];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $sku = trim($_POST['sku'] ?? '');
@@ -41,6 +41,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->execute();
         if ($stmt->get_result()->fetch_assoc()) $errors[] = 'That SKU is already in use.';
         $stmt->close();
+    }
+
+    // Remove is only honored when no replacement file was chosen — uploading
+    // a new image always takes priority over a stale "remove" checkbox state.
+    if (!empty($_POST['remove_image']) && empty($_FILES['image']['name']) && $image) {
+        if (is_file(UPLOAD_PATH . 'basics_products/' . $image)) {
+            unlink(UPLOAD_PATH . 'basics_products/' . $image);
+        }
+        $image = null;
     }
 
     [$image, $image_error] = handle_product_image_upload('image', $image, 'basics_products');
@@ -122,11 +131,15 @@ require __DIR__ . '/includes/admin_sidebar.php';
           </div>
           <div class="mb-3">
             <?php if ($product['image']): ?>
-              <img src="<?= UPLOAD_URL ?>basics_products/<?= sanitize($product['image']) ?>" alt="" class="product-thumb mb-2" style="width:80px;height:80px;">
+              <img src="<?= UPLOAD_URL ?>basics_products/<?= sanitize($product['image']) ?>" alt="" class="product-thumb mb-2 d-block" style="width:80px;height:80px;">
+              <div class="form-check mb-2">
+                <input type="checkbox" class="form-check-input" id="remove_image" name="remove_image" value="1">
+                <label class="form-check-label" for="remove_image">Remove current image</label>
+              </div>
             <?php endif; ?>
             <label class="flbl">Product Image</label>
             <input type="file" name="image" class="fctrl" accept=".jpg,.jpeg,.png,.webp">
-            <div class="form-text">JPG, PNG, or WEBP, max 2MB. Leave blank to keep current image.</div>
+            <div class="form-text">JPG, PNG, or WEBP, max 5MB. Leave blank to keep current image.</div>
           </div>
           <div class="mb-3">
             <label class="flbl">Status</label>

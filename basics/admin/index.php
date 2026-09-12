@@ -4,14 +4,15 @@ require __DIR__ . '/../../config/database.php';
 require __DIR__ . '/../../includes/functions.php';
 require __DIR__ . '/../../includes/auth.php';
 
-require_basics_admin_login();
+require_basics_admin_role(['super_admin']);
 
 $pending_basics_applications = $conn->query("SELECT COUNT(*) AS c FROM basics_members WHERE application_status = 'pending'")->fetch_assoc()['c'];
 $active_basics_members = $conn->query("SELECT COUNT(*) AS c FROM basics_members WHERE application_status = 'approved' AND membership_status = 'active'")->fetch_assoc()['c'];
-$basics_orders_awaiting_payment = $conn->query("SELECT COUNT(*) AS c FROM basics_orders o WHERE o.status = 'placed'
+$basics_orders_awaiting_approval = $conn->query("SELECT COUNT(*) AS c FROM basics_orders WHERE status = 'pending'")->fetch_assoc()['c'];
+$basics_orders_awaiting_payment = $conn->query("SELECT COUNT(*) AS c FROM basics_orders o WHERE o.status IN ('confirmed', 'delivered')
     AND o.total_amount > (SELECT COALESCE(SUM(amount_paid),0) FROM basics_payments p WHERE p.order_id = o.id)")->fetch_assoc()['c'];
 $basics_outstanding_total = (float) $conn->query("SELECT COALESCE(SUM(o.total_amount - IFNULL((SELECT SUM(amount_paid) FROM basics_payments p WHERE p.order_id = o.id), 0)), 0) AS s
-    FROM basics_orders o WHERE o.status = 'placed'")->fetch_assoc()['s'];
+    FROM basics_orders o WHERE o.status IN ('confirmed', 'delivered')")->fetch_assoc()['s'];
 
 $recent_basics_applications = $conn->query("SELECT bm.*, u.full_name, u.username FROM basics_members bm
     JOIN basics_users u ON u.id = bm.user_id WHERE bm.application_status = 'pending' ORDER BY bm.applied_at DESC LIMIT 5");
@@ -40,6 +41,9 @@ require __DIR__ . '/includes/admin_sidebar.php';
       <div class="stat-tile"><div class="stat-num"><?= (int) $active_basics_members ?></div><div class="stat-lbl">Active Members</div></div>
     </div>
     <div class="col-6 col-md-3">
+      <div class="stat-tile"><div class="stat-num<?= $basics_orders_awaiting_approval > 0 ? ' accent' : '' ?>"><?= (int) $basics_orders_awaiting_approval ?></div><div class="stat-lbl">Orders Awaiting Approval</div></div>
+    </div>
+    <div class="col-6 col-md-3">
       <div class="stat-tile"><div class="stat-num"><?= (int) $basics_orders_awaiting_payment ?></div><div class="stat-lbl">Orders Awaiting Payment</div></div>
     </div>
     <div class="col-6 col-md-3">
@@ -51,7 +55,7 @@ require __DIR__ . '/includes/admin_sidebar.php';
     <h2 class="h6 mb-3">Recent Applications</h2>
     <div class="table-responsive mb-4">
       <table class="table-theme">
-        <thead><tr><th>Applicant</th><th>Employer</th><th>Applied</th><th></th></tr></thead>
+        <thead><tr><th>Applicant</th><th>Employer</th><th>Applied</th><th class="no-print"></th></tr></thead>
         <tbody>
         <?php while ($ba = $recent_basics_applications->fetch_assoc()): ?>
           <tr>
@@ -69,7 +73,7 @@ require __DIR__ . '/includes/admin_sidebar.php';
   <h2 class="h6 mb-3">Recent Orders</h2>
   <div class="table-responsive">
     <table class="table-theme">
-      <thead><tr><th>Member</th><th>Total</th><th>Status</th><th></th></tr></thead>
+      <thead><tr><th>Member</th><th>Total</th><th>Status</th><th class="no-print"></th></tr></thead>
       <tbody>
       <?php if ($recent_orders->num_rows === 0): ?>
         <tr><td colspan="4" class="text-muted">No orders yet.</td></tr>
@@ -78,7 +82,8 @@ require __DIR__ . '/includes/admin_sidebar.php';
         <tr>
           <td><?= sanitize($o['full_name']) ?></td>
           <td><?= format_price($o['total_amount']) ?></td>
-          <td><span class="pill pill-<?= $o['status'] === 'placed' ? 'processing' : ($o['status'] === 'delivered' ? 'completed' : 'cancelled') ?>"><?= sanitize($o['status']) ?></span></td>
+          <?php $pill_map = ['pending' => 'processing', 'confirmed' => 'approved', 'paid' => 'approved', 'delivered' => 'completed', 'cancelled' => 'cancelled']; ?>
+          <td><span class="pill pill-<?= $pill_map[$o['status']] ?? 'pending' ?>"><?= sanitize($o['status']) ?></span></td>
           <td><a href="<?= BASE_URL ?>/basics/admin/order_view.php?id=<?= (int) $o['id'] ?>" class="btn-chip btn-chip-outline">View</a></td>
         </tr>
       <?php endwhile; ?>

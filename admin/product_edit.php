@@ -142,7 +142,7 @@ require __DIR__ . '/includes/admin_sidebar.php';
             <?php endif; ?>
             <label class="flbl">Product Image</label>
             <input type="file" name="image" class="fctrl" accept=".jpg,.jpeg,.png,.webp">
-            <div class="form-text">JPG, PNG, or WEBP, max 2MB. Leave blank to keep current image.</div>
+            <div class="form-text">JPG, PNG, or WEBP, max 5MB. Leave blank to keep current image.</div>
           </div>
           <div class="mb-3">
             <label class="flbl">Status</label>
@@ -184,7 +184,7 @@ require __DIR__ . '/includes/admin_sidebar.php';
             <input type="hidden" name="action" value="add_highlight">
             <label class="flbl">Add Highlight Image</label>
             <input type="file" name="highlight_image" class="fctrl mb-2" accept=".jpg,.jpeg,.png,.webp" required>
-            <div class="form-text mb-2">Shown in a "Product Highlights" gallery on the product page. JPG, PNG, or WEBP, max 2MB.</div>
+            <div class="form-text mb-2">Shown in a "Product Highlights" gallery on the product page. JPG, PNG, or WEBP, max 5MB.</div>
             <button type="submit" class="btn-outline-theme w-100 justify-content-center">Add Image</button>
           </form>
         <?php endif; ?>

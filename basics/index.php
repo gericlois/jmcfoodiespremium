@@ -29,8 +29,8 @@ require __DIR__ . '/../includes/navbar.php';
         </div>
         <h1 class="htitle">Basic Needs,<br/><span class="hl">Everyday, For Every Family</span></h1>
         <p class="hdesc mx-auto">
-          A weekly grocery credit line for employees of partner companies. Order rice, breakfast
-          essentials, and viand now &mdash; settle up on payday, 0% interest.
+          A grocery credit line for employees of partner companies. Order rice, breakfast
+          essentials, and viand any time &mdash; settle up 7 days after delivery, 0% interest.
         </p>
         <div class="d-flex flex-wrap justify-content-center gap-3 mb-2">
           <a href="<?= BASICS_URL ?>/apply.php" class="btn-red"><i class="fas fa-file-signature"></i>Apply for Membership</a>
@@ -45,36 +45,29 @@ require __DIR__ . '/../includes/navbar.php';
   <div class="container">
     <div class="text-center mb-5">
       <span class="slbl">How It Works</span>
-      <h2 class="stitle">Your Weekly <span>Grocery Cycle</span></h2>
+      <h2 class="stitle">Simple, <span>No-Fuss Ordering</span></h2>
       <div class="sline"></div>
     </div>
     <div class="row g-4">
-      <div class="col-md-3">
+      <div class="col-md-4">
         <div class="stat-tile h-100">
           <div class="hbi mx-auto mb-3" style="width:56px;height:56px;font-size:1.4rem;"><i class="fas fa-cart-shopping"></i></div>
-          <h3 class="h6">Mon &ndash; Thu</h3>
-          <p class="text-muted mb-0 small">Order Placement</p>
+          <h3 class="h6">Order Any Time</h3>
+          <p class="text-muted mb-0 small">No fixed ordering window &mdash; browse and check out whenever you need groceries.</p>
         </div>
       </div>
-      <div class="col-md-3">
-        <div class="stat-tile h-100">
-          <div class="hbi mx-auto mb-3" style="width:56px;height:56px;font-size:1.4rem;"><i class="fas fa-flag-checkered"></i></div>
-          <h3 class="h6">Friday</h3>
-          <p class="text-muted mb-0 small">Order Cut-off</p>
-        </div>
-      </div>
-      <div class="col-md-3">
-        <div class="stat-tile h-100">
-          <div class="hbi mx-auto mb-3" style="width:56px;height:56px;font-size:1.4rem;"><i class="fas fa-money-bill-wave"></i></div>
-          <h3 class="h6">Sat &ndash; Sun</h3>
-          <p class="text-muted mb-0 small">Payment Period</p>
-        </div>
-      </div>
-      <div class="col-md-3">
+      <div class="col-md-4">
         <div class="stat-tile h-100">
           <div class="hbi mx-auto mb-3" style="width:56px;height:56px;font-size:1.4rem;"><i class="fas fa-truck"></i></div>
-          <h3 class="h6">Sun &ndash; Mon</h3>
-          <p class="text-muted mb-0 small">Delivery</p>
+          <h3 class="h6">We Deliver</h3>
+          <p class="text-muted mb-0 small">Delivery doesn't wait on payment &mdash; your order goes out on schedule.</p>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="stat-tile h-100">
+          <div class="hbi mx-auto mb-3" style="width:56px;height:56px;font-size:1.4rem;"><i class="fas fa-money-bill-wave"></i></div>
+          <h3 class="h6">Pay Within 7 Days</h3>
+          <p class="text-muted mb-0 small">Settle your balance 7 days after your order is delivered, 0% interest.</p>
         </div>
       </div>
     </div>

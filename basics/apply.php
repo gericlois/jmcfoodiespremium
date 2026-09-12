@@ -46,6 +46,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (strlen($password) < 6) $errors[] = 'Password must be at least 6 characters.';
     if ($password !== $confirm) $errors[] = 'Passwords do not match.';
     if ($employer_name === '') $errors[] = 'Employer name is required.';
+    if ($employer_contact === '') $errors[] = 'Employer contact is required.';
+    if ($position === '') $errors[] = 'Position is required.';
 
     if (empty($errors)) {
         $stmt = $conn->prepare("SELECT id FROM basics_users WHERE username = ?");
@@ -143,7 +145,7 @@ require __DIR__ . '/../includes/navbar.php';
           </div>
         <?php endif; ?>
 
-        <form method="post" enctype="multipart/form-data" novalidate>
+        <form method="post" enctype="multipart/form-data">
           <h2 class="h6 mb-3">Your Account</h2>
           <div class="mb-3">
             <label class="flbl">Full Name</label>
@@ -195,12 +197,12 @@ require __DIR__ . '/../includes/navbar.php';
           </div>
           <div class="row">
             <div class="col-sm-6 mb-3">
-              <label class="flbl">Employer Contact (optional)</label>
-              <input type="text" name="employer_contact" class="fctrl" value="<?= sanitize($employer_contact) ?>">
+              <label class="flbl">Employer Contact</label>
+              <input type="text" name="employer_contact" class="fctrl" value="<?= sanitize($employer_contact) ?>" required>
             </div>
             <div class="col-sm-6 mb-3">
-              <label class="flbl">Position (optional)</label>
-              <input type="text" name="position" class="fctrl" value="<?= sanitize($position) ?>">
+              <label class="flbl">Position</label>
+              <input type="text" name="position" class="fctrl" value="<?= sanitize($position) ?>" required>
             </div>
           </div>
 

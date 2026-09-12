@@ -55,7 +55,10 @@ $module_logout_url = $module_name === 'JMC Foodies Basics' ? BASICS_URL . '/logo
       <div class="d-flex align-items-center gap-2 ms-3">
         <?php if ($module_is_logged_in): ?>
           <?php if ($module_name === 'JMC Foodies Basics'): ?>
-            <a href="<?= BASICS_URL ?>/cart.php" class="nav-link nav-cta"><i class="fas fa-cart-shopping me-1"></i>Cart</a>
+            <?php $basics_cart_count = basics_cart_item_count($conn, basics_current_user_id()); ?>
+            <a href="<?= BASICS_URL ?>/cart.php" class="nav-link nav-cta" id="basicsCartLink">
+              <i class="fas fa-cart-shopping me-1"></i>Cart<?php if ($basics_cart_count > 0): ?><span class="nav-cart-badge" id="basicsCartBadge"><?= $basics_cart_count ?></span><?php endif; ?>
+            </a>
           <?php endif; ?>
           <a href="<?= $module_logout_url ?>" class="nav-link nav-cta"><i class="fas fa-right-from-bracket me-1"></i>Logout</a>
         <?php else: ?>

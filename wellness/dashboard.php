@@ -72,6 +72,10 @@ require __DIR__ . '/../includes/navbar.php';
     </div>
   </div>
 
+  <div class="d-flex justify-content-end mb-4">
+    <a href="<?= BASE_URL ?>/change_password.php" class="btn-outline-theme"><i class="fas fa-key"></i>Change Password</a>
+  </div>
+
   <div class="panel-card mb-4">
     <h2 class="h6 mb-3">Your Refer-a-Friend Code &amp; Link</h2>
     <div class="row g-3 align-items-center">

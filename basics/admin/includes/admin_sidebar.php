@@ -11,6 +11,7 @@ $sub_to_parent = [
     '/basics/admin/member_view.php'      => '/basics/admin/members.php',
     '/basics/admin/product_edit.php'     => '/basics/admin/products.php',
     '/basics/admin/order_view.php'       => '/basics/admin/orders.php',
+    '/basics/admin/delivery_receipt.php' => '/basics/admin/orders.php',
 ];
 $current_path = $sub_to_parent[$current_path] ?? $current_path;
 
@@ -27,8 +28,8 @@ $nav_groups = [
         '/basics/admin/applications.php' => ['icon' => 'fa-file-signature', 'label' => 'Applications', 'badge' => $pending_basics_count],
         '/basics/admin/members.php'      => ['icon' => 'fa-users',          'label' => 'Members'],
         '/basics/admin/products.php'     => ['icon' => 'fa-box',            'label' => 'Manage Products'],
-        '/basics/admin/cycles.php'       => ['icon' => 'fa-calendar-week',  'label' => 'Weekly Cycles'],
         '/basics/admin/orders.php'       => ['icon' => 'fa-receipt',        'label' => 'Manage Orders'],
+        '/basics/admin/supplier_summary.php' => ['icon' => 'fa-truck-ramp-box', 'label' => 'Supplier Summary'],
         '/basics/admin/payments.php'     => ['icon' => 'fa-money-bill-wave', 'label' => 'Payments'],
         '/basics/admin/payment_reminders.php' => ['icon' => 'fa-bell',       'label' => 'Payment Reminders'],
         '/basics/admin/payment_submissions.php' => ['icon' => 'fa-receipt', 'label' => 'Payment Submissions', 'badge' => $pending_basics_payments_count],
@@ -40,8 +41,38 @@ $nav_groups = [
     'System' => [
         '/basics/admin/settings.php' => ['icon' => 'fa-gear', 'label' => 'Settings'],
         '/basics/admin/activity_log.php' => ['icon' => 'fa-clock-rotate-left', 'label' => 'Activity Log'],
+        '/basics/admin/communication_log.php' => ['icon' => 'fa-comments', 'label' => 'Communication Log'],
     ],
 ];
+
+// staff_orders and staff_payments are restricted roles (see
+// require_basics_admin_role() in includes/auth.php) — only show each the
+// pages it can actually open, so the nav doesn't dangle links that just
+// bounce back to its landing page.
+$staff_role_paths = [
+    'staff_orders' => [
+        '/basics/admin/applications.php', '/basics/admin/products.php',
+        '/basics/admin/orders.php', '/basics/admin/supplier_summary.php',
+    ],
+    'staff_payments' => [
+        '/basics/admin/payments.php', '/basics/admin/payment_reminders.php',
+        '/basics/admin/payment_submissions.php', '/basics/admin/emergency_credit.php',
+        '/basics/admin/benefit_requests.php', '/basics/admin/dormancy.php',
+    ],
+];
+if (isset($staff_role_paths[basics_admin_role()])) {
+    $allowed_paths = $staff_role_paths[basics_admin_role()];
+    foreach ($nav_groups as $group_label => $group_items) {
+        $filtered = array_intersect_key($group_items, array_flip($allowed_paths));
+        if (empty($filtered)) {
+            unset($nav_groups[$group_label]);
+        } else {
+            $nav_groups[$group_label] = $filtered;
+        }
+    }
+}
+
+$basics_dashboard_url = basics_admin_landing_url();
 ?>
 <div class="admin-shell">
   <div class="offcanvas offcanvas-start offcanvas-lg admin-sidebar" tabindex="-1" id="adminSidebar">
@@ -52,7 +83,7 @@ $nav_groups = [
       <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" data-bs-target="#adminSidebar" aria-label="Close"></button>
     </div>
     <div class="offcanvas-body admin-sidebar-body">
-      <a href="<?= BASE_URL ?>/basics/admin/index.php" class="admin-sidebar-brand d-none d-lg-flex">
+      <a href="<?= BASE_URL . $basics_dashboard_url ?>" class="admin-sidebar-brand d-none d-lg-flex">
         <div class="brand-logo-box">
           <img src="<?= BASE_URL ?>/assets/img/basics/logo.jpg" alt="JMC Foodies Basics" class="brand-logo" style="height:34px;">
         </div>

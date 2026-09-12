@@ -18,6 +18,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             mark_order_delivered($conn, $id, current_admin_id());
         } elseif ($action === 'cancel') {
             cancel_order($conn, $id);
+        } elseif ($action === 'archive') {
+            $stmt = $conn->prepare("UPDATE orders SET archived_at = NOW() WHERE id = ? AND status IN ('completed', 'cancelled')");
+            $stmt->bind_param('i', $id);
+            $stmt->execute();
+            $stmt->close();
+        } elseif ($action === 'unarchive') {
+            $stmt = $conn->prepare("UPDATE orders SET archived_at = NULL WHERE id = ?");
+            $stmt->bind_param('i', $id);
+            $stmt->execute();
+            $stmt->close();
         }
         $conn->commit();
     } catch (Exception $e) {
@@ -123,6 +133,15 @@ require __DIR__ . '/includes/admin_sidebar.php';
           <p class="mb-0" style="color:var(--green);"><i class="fas fa-check-circle"></i> Delivered &amp; rewards credited on <?= date('M j, Y g:i A', strtotime($order['confirmed_at'])) ?></p>
         <?php else: ?>
           <p class="text-muted mb-0">This order was cancelled.</p>
+        <?php endif; ?>
+
+        <?php if (in_array($order['status'], ['completed', 'cancelled'], true)): ?>
+          <form method="post" class="d-inline mt-2">
+            <input type="hidden" name="action" value="<?= $order['archived_at'] ? 'unarchive' : 'archive' ?>">
+            <button type="submit" class="btn-chip btn-chip-outline" <?= $order['archived_at'] ? '' : 'onclick="return confirm(\'Archive this order? It will be hidden from the active list.\');"' ?>>
+              <i class="fas fa-box-archive"></i> <?= $order['archived_at'] ? 'Unarchive' : 'Archive' ?>
+            </button>
+          </form>
         <?php endif; ?>
       </div>
     </div>

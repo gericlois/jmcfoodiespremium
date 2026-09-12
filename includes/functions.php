@@ -1,8 +1,65 @@
 <?php
 require_once __DIR__ . '/../config/sms.php';
+require_once __DIR__ . '/../config/email.php';
 
 function format_price($amount) {
     return '₱' . number_format((float) $amount, 2);
+}
+
+// ---------------------------------------------------------------
+// Records every SMS/email send attempt (communication_log), called from
+// inside send_sms()/send_email() so every trigger — automatic (member
+// actions like placing an order) and admin-initiated (individual message,
+// broadcast) — gets logged uniformly with no per-call-site wiring needed.
+// module/admin attribution is inferred from whichever session is active
+// at send time: an admin session (Wellness or Basics) means this was
+// admin-initiated; otherwise falls back to whichever member session is
+// active, since that's what an automatic trigger fires under.
+// ---------------------------------------------------------------
+function log_communication($channel, $recipient, $subject, $message, $status) {
+    global $conn;
+    if (!isset($conn) || !($conn instanceof mysqli)) {
+        return;
+    }
+
+    // Wellness and Basics admins are two separate sessions/tables — same
+    // dual-lookup pattern as log_activity().
+    $admin_id = null;
+    $admin_type = null;
+    $table = null;
+    if (function_exists('is_admin_logged_in') && is_admin_logged_in()) {
+        $admin_id = current_admin_id();
+        $admin_type = 'wellness';
+        $table = 'admins';
+    } elseif (function_exists('basics_is_admin_logged_in') && basics_is_admin_logged_in()) {
+        $admin_id = basics_current_admin_id();
+        $admin_type = 'basics';
+        $table = 'basics_admins';
+    }
+
+    $admin_name = null;
+    if ($admin_id) {
+        $stmt = $conn->prepare("SELECT name FROM $table WHERE id = ?");
+        $stmt->bind_param('i', $admin_id);
+        $stmt->execute();
+        $admin_name = $stmt->get_result()->fetch_assoc()['name'] ?? null;
+        $stmt->close();
+    }
+
+    $module = $admin_type;
+    if ($module === null) {
+        if (function_exists('basics_is_logged_in') && basics_is_logged_in()) {
+            $module = 'basics';
+        } elseif (function_exists('is_logged_in') && is_logged_in()) {
+            $module = 'wellness';
+        }
+    }
+
+    $stmt = $conn->prepare("INSERT INTO communication_log (channel, module, recipient, subject, message, status, admin_id, admin_type, admin_name)
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param('ssssssiss', $channel, $module, $recipient, $subject, $message, $status, $admin_id, $admin_type, $admin_name);
+    $stmt->execute();
+    $stmt->close();
 }
 
 // ---------------------------------------------------------------
@@ -14,7 +71,11 @@ function format_price($amount) {
 // SEMAPHORE_API_KEY isn't configured yet, so the app works before SMS setup.
 // ---------------------------------------------------------------
 function send_sms($to, $message) {
-    if (SEMAPHORE_API_KEY === '' || trim((string) $to) === '') {
+    if (trim((string) $to) === '') {
+        return false;
+    }
+    if (SEMAPHORE_API_KEY === '') {
+        log_communication('sms', $to, null, $message, 'failed');
         return false;
     }
 
@@ -36,7 +97,101 @@ function send_sms($to, $message) {
     $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
 
-    return $response !== false && $http_code >= 200 && $http_code < 300;
+    $success = $response !== false && $http_code >= 200 && $http_code < 300;
+    log_communication('sms', $to, null, $message, $success ? 'sent' : 'failed');
+    return $success;
+}
+
+// ---------------------------------------------------------------
+// Email notifications, sent over Gmail SMTP (smtp.gmail.com:465, implicit
+// TLS) via raw sockets — no PHPMailer/Composer in this codebase, so this
+// mirrors send_sms()'s style (a plain PHP function wrapping the provider's
+// wire protocol directly). Uses a Gmail App Password, not the account's
+// real login password (see config/email.example.php for setup).
+// Fails silently (returns false, logs nothing to the user-facing page)
+// rather than blocking whatever action it's attached to, same contract as
+// send_sms(). Skips entirely if GMAIL_SMTP_USERNAME isn't configured yet.
+// ---------------------------------------------------------------
+function smtp_read_response($socket) {
+    $data = '';
+    while (($line = fgets($socket, 515)) !== false) {
+        $data .= $line;
+        // A response is done once a line has the code followed by a space
+        // (not a dash) — a dash means more lines of this same response follow.
+        if (isset($line[3]) && $line[3] === ' ') {
+            break;
+        }
+    }
+    return $data;
+}
+
+function send_email($to, $subject, $body) {
+    if (trim((string) $to) === '') {
+        return false;
+    }
+    if (GMAIL_SMTP_USERNAME === '') {
+        log_communication('email', $to, $subject, $body, 'failed');
+        return false;
+    }
+
+    // Appended to every notification email sent through this function, so
+    // callers don't each need to remember to add it.
+    $full_body = $body . "\r\n\r\nFor questions and concerns please call +63 917 323 8153.";
+
+    $socket = @stream_socket_client('ssl://smtp.gmail.com:465', $errno, $errstr, 10);
+    if (!$socket) {
+        log_communication('email', $to, $subject, $body, 'failed');
+        return false;
+    }
+    stream_set_timeout($socket, 10);
+
+    smtp_read_response($socket); // 220 greeting
+
+    fwrite($socket, "EHLO localhost\r\n");
+    smtp_read_response($socket);
+
+    fwrite($socket, "AUTH LOGIN\r\n");
+    smtp_read_response($socket);
+    fwrite($socket, base64_encode(GMAIL_SMTP_USERNAME) . "\r\n");
+    smtp_read_response($socket);
+    fwrite($socket, base64_encode(GMAIL_SMTP_PASSWORD) . "\r\n");
+    $auth_response = smtp_read_response($socket);
+    if (substr($auth_response, 0, 3) !== '235') {
+        fclose($socket);
+        log_communication('email', $to, $subject, $body, 'failed');
+        return false;
+    }
+
+    fwrite($socket, 'MAIL FROM:<' . GMAIL_SMTP_USERNAME . ">\r\n");
+    smtp_read_response($socket);
+    fwrite($socket, 'RCPT TO:<' . $to . ">\r\n");
+    $rcpt_response = smtp_read_response($socket);
+    if (substr($rcpt_response, 0, 3) !== '250') {
+        fclose($socket);
+        log_communication('email', $to, $subject, $body, 'failed');
+        return false;
+    }
+
+    fwrite($socket, "DATA\r\n");
+    smtp_read_response($socket);
+
+    $headers = 'From: ' . GMAIL_SMTP_FROM_NAME . ' <' . GMAIL_SMTP_USERNAME . ">\r\n"
+        . 'To: <' . $to . ">\r\n"
+        . 'Subject: ' . $subject . "\r\n"
+        . "MIME-Version: 1.0\r\n"
+        . "Content-Type: text/plain; charset=UTF-8\r\n";
+    // Per RFC 5321, a lone "." on a line marks end-of-data — escape any line
+    // in the body that starts with one so it isn't mistaken for the terminator.
+    $escaped_body = preg_replace('/^\./m', '..', $full_body);
+    fwrite($socket, $headers . "\r\n" . $escaped_body . "\r\n.\r\n");
+    $data_response = smtp_read_response($socket);
+
+    fwrite($socket, "QUIT\r\n");
+    fclose($socket);
+
+    $success = substr($data_response, 0, 3) === '250';
+    log_communication('email', $to, $subject, $body, $success ? 'sent' : 'failed');
+    return $success;
 }
 
 function payment_method_label($method) {
@@ -138,8 +293,8 @@ function handle_product_image_upload($file_key, $existing_filename, $subfolder =
     if ($_FILES[$file_key]['error'] !== UPLOAD_ERR_OK) {
         return [$existing_filename, 'Image upload failed.'];
     }
-    if ($_FILES[$file_key]['size'] > 2 * 1024 * 1024) {
-        return [$existing_filename, 'Image must be smaller than 2MB.'];
+    if ($_FILES[$file_key]['size'] > 5 * 1024 * 1024) {
+        return [$existing_filename, 'Image must be smaller than 5MB.'];
     }
     if (!isset($allowed_types[$mime])) {
         return [$existing_filename, 'Image must be a JPG, PNG, or WEBP file.'];
@@ -158,13 +313,89 @@ function handle_product_image_upload($file_key, $existing_filename, $subfolder =
 }
 
 // ---------------------------------------------------------------
+// Downscales an uploaded photo in place if it's larger than $max_dimension
+// on its longest side. Phone-camera photos (KYC IDs, payment proof
+// screenshots) are routinely 3000px+ and several MB despite passing the
+// upload size cap, which makes them slow to load when an admin views one —
+// this brings them down to a web-viewable size while staying legible.
+// No-op (fails silently, keeps the original file) if GD isn't available or
+// the mime type isn't a resizable image (e.g. PDF) — a missing GD extension
+// should never block an upload that already succeeded.
+// ---------------------------------------------------------------
+function resize_image_if_needed($path, $mime, $max_dimension = 1600, $quality = 82) {
+    $creators = [
+        'image/jpeg' => 'imagecreatefromjpeg',
+        'image/png' => 'imagecreatefrompng',
+        'image/webp' => 'imagecreatefromwebp',
+    ];
+    if (!isset($creators[$mime]) || !function_exists($creators[$mime]) || !function_exists('imagecreatetruecolor')) {
+        return;
+    }
+
+    $size = @getimagesize($path);
+    if (!$size || max($size[0], $size[1]) <= $max_dimension) {
+        return;
+    }
+
+    $src = @$creators[$mime]($path);
+    if (!$src) {
+        return;
+    }
+
+    $ratio = $max_dimension / max($size[0], $size[1]);
+    $new_width = max(1, (int) round($size[0] * $ratio));
+    $new_height = max(1, (int) round($size[1] * $ratio));
+
+    $dst = imagecreatetruecolor($new_width, $new_height);
+    if ($mime === 'image/png') {
+        imagealphablending($dst, false);
+        imagesavealpha($dst, true);
+    }
+    imagecopyresampled($dst, $src, 0, 0, 0, 0, $new_width, $new_height, $size[0], $size[1]);
+
+    if ($mime === 'image/jpeg') {
+        imagejpeg($dst, $path, $quality);
+    } elseif ($mime === 'image/png') {
+        imagepng($dst, $path, 6);
+    } elseif ($mime === 'image/webp') {
+        imagewebp($dst, $path, $quality);
+    }
+
+    imagedestroy($src);
+    imagedestroy($dst);
+}
+
+// ---------------------------------------------------------------
+// Sets far-future browser caching for a protected attachment served through
+// a PHP viewer script (kyc_view.php, payment_proof_view.php,
+// benefit_document_view.php) and short-circuits with 304 if the browser
+// already has this exact file cached. The file itself never changes once
+// uploaded (KYC docs/payment proofs aren't re-uploaded in place), so it's
+// safe to cache aggressively even though it's a private, login-gated file.
+// ---------------------------------------------------------------
+function send_attachment_cache_headers($path) {
+    $etag = '"' . md5_file($path) . '"';
+    $last_modified = gmdate('D, d M Y H:i:s', filemtime($path)) . ' GMT';
+
+    header('Cache-Control: private, max-age=31536000, immutable');
+    header('ETag: ' . $etag);
+    header('Last-Modified: ' . $last_modified);
+
+    $if_none_match = $_SERVER['HTTP_IF_NONE_MATCH'] ?? '';
+    $if_modified_since = $_SERVER['HTTP_IF_MODIFIED_SINCE'] ?? '';
+    if ($if_none_match === $etag || $if_modified_since === $last_modified) {
+        http_response_code(304);
+        exit;
+    }
+}
+
+// ---------------------------------------------------------------
 // Notifications
 // ---------------------------------------------------------------
-// Sent when an admin approves a pending registration. Uses PHP's mail()
-// (needs a working sendmail/SMTP relay on the server to actually deliver —
-// on a bare XAMPP install this call will silently fail, which is fine
-// during local dev, but should be verified once this goes live).
-function send_account_approved_email($to_email, $full_name) {
+// Sent when an admin approves a pending registration, via send_email()
+// (Gmail SMTP — see config/email.example.php for setup). No password is
+// included — the member logs in with whatever they chose at registration.
+function send_account_approved_email($to_email, $full_name, $username) {
     if (empty($to_email)) {
         return false;
     }
@@ -172,12 +403,11 @@ function send_account_approved_email($to_email, $full_name) {
     $subject = 'Your ' . $module_name . ' account has been confirmed';
     $message = "Hi {$full_name},\r\n\r\n"
         . 'Good news! Your ' . $module_name . " account has been reviewed and confirmed by our team.\r\n"
-        . "You can now log in and start earning.\r\n\r\n"
+        . "You can now log in with the username and password you set at registration:\r\n\r\n"
+        . "Username: {$username}\r\n\r\n"
         . 'Log in here: ' . BASE_URL . "/login.php\r\n\r\n"
         . '— ' . $module_name . ' Team';
-    $headers = 'From: ' . $module_name . ' <no-reply@' . preg_replace('/^www\./', '', parse_url(BASE_URL, PHP_URL_HOST) ?: 'localhost') . ">\r\n"
-        . 'Content-Type: text/plain; charset=UTF-8';
-    return mail($to_email, $subject, $message, $headers);
+    return send_email($to_email, $subject, $message);
 }
 
 // Used by both admin/users.php and admin/user_view.php. Emails the user
@@ -189,7 +419,7 @@ function update_user_status($conn, $id, $new_status) {
         $new_status = 'active';
     }
 
-    $stmt = $conn->prepare("SELECT status, email, full_name FROM users WHERE id = ?");
+    $stmt = $conn->prepare("SELECT status, email, full_name, username FROM users WHERE id = ?");
     $stmt->bind_param('i', $id);
     $stmt->execute();
     $user = $stmt->get_result()->fetch_assoc();
@@ -207,7 +437,9 @@ function update_user_status($conn, $id, $new_status) {
     log_activity($conn, 'update_user_status', 'Set Wellness user "' . $user['full_name'] . '" status to ' . $new_status);
 
     if ($user['status'] === 'pending' && $new_status === 'active') {
-        send_account_approved_email($user['email'], $user['full_name']);
+        // Approval no longer resets the password — the member already chose
+        // their own at registration, so they log in with that directly.
+        send_account_approved_email($user['email'], $user['full_name'], $user['username']);
     }
 }
 
